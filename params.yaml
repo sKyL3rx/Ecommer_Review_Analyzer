@@ -1,0 +1,72 @@
+data:
+  raw_reviews_path: data/raw/appliances_reviews_sample_200k.csv
+  train_path: data/processed/train.csv
+  val_path: data/processed/val.csv
+  test_path: data/processed/test.csv
+  test_size: 0.15
+  val_size: 0.15
+  random_state: 42
+  min_review_len: 3
+
+sft:
+  train_path: data/processed/phase2/trl_data/train.jsonl
+  val_path: data/processed/phase2/trl_data/val.jsonl
+  test_path: data/processed/phase2/trl_data/test.jsonl
+
+  model_name: Qwen/Qwen2.5-3B-Instruct
+  output_dir: artifacts/models/summary_sft
+
+  seed: 42
+  max_seq_length: 2048
+
+  learning_rate: 2e-4
+  num_train_epochs: 15
+
+  per_device_train_batch_size: 2
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 16
+
+  logging_steps: 10
+  eval_steps: 100
+  save_steps: 100
+  save_total_limit: 2
+
+  warmup_ratio: 0.03
+  lr_scheduler_type: cosine
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+
+  bf16: true
+  fp16: false
+  tf32: true
+  gradient_checkpointing: true
+
+  assistant_only_loss: true
+  packing: false
+  eval_packing: false
+  dataset_num_proc: 2
+  dataloader_num_workers: 2
+
+  load_best_model_at_end: true
+  metric_for_best_model: eval_loss
+  greater_is_better: false
+  early_stopping_patience: 3
+  early_stopping_threshold: 0.0
+
+  qlora:
+    enabled: true
+    load_in_4bit: true
+    bnb_4bit_quant_type: nf4
+    bnb_4bit_use_double_quant: true
+    bnb_4bit_compute_dtype: bfloat16
+
+  lora:
+    r: 16
+    lora_alpha: 32
+    lora_dropout: 0.05
+    bias: none
+    task_type: CAUSAL_LM
+    target_modules: all-linear
+
+  report_to: none
+  trust_remote_code: false
