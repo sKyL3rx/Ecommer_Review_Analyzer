@@ -3,7 +3,12 @@ __pycache__/
 *.pyc
 data/raw/
 data/interim/
-data/processed/
-artifacts/
+data/processed/**
+!data/processed/**/
+!data/processed/**/*.dvc
+
+artifacts/**
+!artifacts/**/
+!artifacts/**/*.dvc
 mlruns/
 .ipynb_checkpoints/
