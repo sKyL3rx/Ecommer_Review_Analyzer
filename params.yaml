@@ -19,15 +19,17 @@ sft:
   seed: 42
   max_seq_length: 2048
 
-  learning_rate: 2e-4
-  num_train_epochs: 15
+  learning_rate: 1e-4
+  num_train_epochs: 8
 
   per_device_train_batch_size: 2
   per_device_eval_batch_size: 2
   gradient_accumulation_steps: 16
 
+  eos_token: "<|im_end|>"
+
   logging_steps: 10
-  eval_steps: 1
+  eval_steps: 100
   save_steps: 100
   save_total_limit: 2
 
@@ -67,6 +69,7 @@ sft:
     bias: none
     task_type: CAUSAL_LM
     target_modules: all-linear
+    use_rslora: true
 
   report_to: none
   trust_remote_code: false

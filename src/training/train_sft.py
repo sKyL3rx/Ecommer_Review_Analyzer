@@ -68,6 +68,11 @@ def main() -> None:
         use_fast=True,
         trust_remote_code=cfg.get("trust_remote_code", False),
     )
+
+    eos_token = cfg.get("eos_token")
+    if eos_token:
+        tokenizer.eos_token = eos_token
+
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -86,10 +91,20 @@ def main() -> None:
         cfg["model_name"],
         quantization_config=quant_config,
         trust_remote_code=cfg.get("trust_remote_code", False),
-        torch_dtype=compute_dtype,
+        dtype=compute_dtype,
         device_map="auto",
     )
     model.config.use_cache = False
+
+    if eos_token and tokenizer.eos_token_id is not None:
+        model.config.eos_token_id = tokenizer.eos_token_id
+        if getattr(model, "generation_config", None) is not None:
+            model.generation_config.eos_token_id = tokenizer.eos_token_id
+
+    if tokenizer.pad_token_id is not None:
+        model.config.pad_token_id = tokenizer.pad_token_id
+        if getattr(model, "generation_config", None) is not None:
+            model.generation_config.pad_token_id = tokenizer.pad_token_id
 
     peft_config = LoraConfig(
         r=int(lcfg.get("r", 16)),
@@ -98,6 +113,7 @@ def main() -> None:
         bias=lcfg.get("bias", "none"),
         task_type=lcfg.get("task_type", "CAUSAL_LM"),
         target_modules=lcfg.get("target_modules", "all-linear"),
+        use_rslora=bool(lcfg.get("use_rslora", False)),
     )
 
     sft_config = SFTConfig(
@@ -127,10 +143,12 @@ def main() -> None:
         packing=bool(cfg.get("packing", False)),
         eval_packing=bool(cfg.get("eval_packing", False)),
         dataset_num_proc=int(cfg.get("dataset_num_proc", 2)),
+        dataloader_num_workers=int(cfg.get("dataloader_num_workers", 2)),
         report_to=cfg.get("report_to", "none"),
         load_best_model_at_end=bool(cfg.get("load_best_model_at_end", True)),
         metric_for_best_model=cfg.get("metric_for_best_model", "eval_loss"),
         greater_is_better=bool(cfg.get("greater_is_better", False)),
+        eos_token=eos_token,
         seed=int(cfg.get("seed", 42)),
     )
 
