@@ -23,15 +23,19 @@ def load_params(path: str = "params.yaml") -> dict[str, Any]:
         return yaml.safe_load(f)
 
 
-def validate_prompt_completion_example(example: dict[str, Any]) -> bool:
-    prompt = example.get("prompt")
-    completion = example.get("completion")
-
-    if not isinstance(prompt, str) or not prompt.strip():
+def validate_messages_example(example: dict[str, Any]) -> bool:
+    messages = example.get("messages")
+    if not isinstance(messages, list) or len(messages) < 2:
         return False
-    if not isinstance(completion, str) or not completion.strip():
-        return False
-
+    for msg in messages:
+        if not isinstance(msg, dict):
+            return False
+        if "role" not in msg or "content" not in msg:
+            return False
+        if not isinstance(msg["role"], str) or not isinstance(msg["content"], str):
+            return False
+        if not msg["content"].strip():
+            return False
     return True
 
 
@@ -52,23 +56,18 @@ def main() -> None:
         },
     )
 
-    bad_train = [i for i, ex in enumerate(dataset["train"]) if not validate_prompt_completion_example(ex)]
-    bad_val = [i for i, ex in enumerate(dataset["validation"]) if not validate_prompt_completion_example(ex)]
-
+    bad_train = [i for i, ex in enumerate(dataset["train"]) if not validate_messages_example(ex)]
+    bad_val = [i for i, ex in enumerate(dataset["validation"]) if not validate_messages_example(ex)]
     if bad_train:
         raise ValueError(f"Invalid train examples at indices: {bad_train[:10]}")
     if bad_val:
-        raise ValueError(f"Invalid validation examples at indices: {bad_val[:10]}")
+        raise ValueError(f"Invalid val examples at indices: {bad_val[:10]}")
 
     tokenizer = AutoTokenizer.from_pretrained(
         cfg["model_name"],
         use_fast=True,
         trust_remote_code=cfg.get("trust_remote_code", False),
     )
-
-    tokenizer.truncation_side = "left"
-    tokenizer.padding_side = "right"
-
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -87,7 +86,7 @@ def main() -> None:
         cfg["model_name"],
         quantization_config=quant_config,
         trust_remote_code=cfg.get("trust_remote_code", False),
-        dtype=compute_dtype,
+        torch_dtype=compute_dtype,
         device_map="auto",
     )
     model.config.use_cache = False
@@ -99,17 +98,16 @@ def main() -> None:
         bias=lcfg.get("bias", "none"),
         task_type=lcfg.get("task_type", "CAUSAL_LM"),
         target_modules=lcfg.get("target_modules", "all-linear"),
-        use_rslora=bool(lcfg.get("use_rslora", False)),
     )
 
     sft_config = SFTConfig(
         output_dir=cfg["output_dir"],
-        max_length=int(cfg.get("max_seq_length", 2048)),
-        learning_rate=float(cfg.get("learning_rate", 1e-4)),
-        num_train_epochs=float(cfg.get("num_train_epochs", 8)),
+        max_length=int(cfg.get("max_seq_length", 1024)),
+        learning_rate=float(cfg.get("learning_rate", 2e-4)),
+        num_train_epochs=float(cfg.get("num_train_epochs", 5)),
         per_device_train_batch_size=int(cfg.get("per_device_train_batch_size", 2)),
         per_device_eval_batch_size=int(cfg.get("per_device_eval_batch_size", 2)),
-        gradient_accumulation_steps=int(cfg.get("gradient_accumulation_steps", 16)),
+        gradient_accumulation_steps=int(cfg.get("gradient_accumulation_steps", 8)),
         logging_steps=int(cfg.get("logging_steps", 10)),
         eval_steps=int(cfg.get("eval_steps", 100)),
         save_steps=int(cfg.get("save_steps", 100)),
@@ -125,17 +123,14 @@ def main() -> None:
         fp16=bool(cfg.get("fp16", False)),
         tf32=bool(cfg.get("tf32", True)),
         gradient_checkpointing=bool(cfg.get("gradient_checkpointing", True)),
-        completion_only_loss=bool(cfg.get("completion_only_loss", True)),
-        assistant_only_loss=bool(cfg.get("assistant_only_loss", False)),
+        assistant_only_loss=bool(cfg.get("assistant_only_loss", True)),
         packing=bool(cfg.get("packing", False)),
         eval_packing=bool(cfg.get("eval_packing", False)),
         dataset_num_proc=int(cfg.get("dataset_num_proc", 2)),
-        dataloader_num_workers=int(cfg.get("dataloader_num_workers", 2)),
         report_to=cfg.get("report_to", "none"),
         load_best_model_at_end=bool(cfg.get("load_best_model_at_end", True)),
         metric_for_best_model=cfg.get("metric_for_best_model", "eval_loss"),
         greater_is_better=bool(cfg.get("greater_is_better", False)),
-        eos_token=cfg.get("eos_token", "<|im_end|>"),
         seed=int(cfg.get("seed", 42)),
     )
 
@@ -165,18 +160,15 @@ def main() -> None:
     trainer.log_metrics("eval", eval_metrics)
     trainer.save_metrics("eval", eval_metrics)
 
-    print(
-        json.dumps(
-            {
-                "status": "ok",
-                "output_dir": cfg["output_dir"],
-                "train_samples": len(dataset["train"]),
-                "eval_samples": len(dataset["validation"]),
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
-    )
+    print(json.dumps(
+        {
+            "status": "ok",
+            "output_dir": cfg["output_dir"],
+            "train_samples": len(dataset["train"]),
+            "eval_samples": len(dataset["validation"]),
+        },
+        indent=2,
+    ))
 
 
 if __name__ == "__main__":
