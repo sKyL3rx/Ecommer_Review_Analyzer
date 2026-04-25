@@ -1,0 +1,13 @@
+fastapi==0.135.2
+uvicorn[standard]==0.42.0
+pydantic
+pydantic-settings==2.6.1
+python-dotenv
+redis==7.4.0
+rq==2.8.0
+pandas==2.3.2
+numpy==2.3.3
+scikit-learn==1.8.0
+joblib==1.5.3
+pyarrow==23.0.1
+requests==2.32.4
