@@ -32,11 +32,30 @@ from rq.job import Job
 from src.app.core.config import settings
 from src.app.jobs.queue import insight_queue, redis_conn
 from src.app.workers.insight_tasks import generate_product_insight_task
+from src.app.storage.db import init_db
+from fastapi import Depends
+from sqlalchemy.orm import Session
 
+from src.app.storage.db import get_session
+from src.app.storage.repositories import get_product_by_id, search_products, get_product_insight
+
+from src.app.storage.cache import (
+    get_json_cache,
+    product_insight_cache_key,
+    set_json_cache,
+)
+
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
 
 app = FastAPI(
     title="Product Review Intelligence API",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 sentiment_model = InferenceSentiment()
@@ -143,40 +162,59 @@ def list_products(
     query: str | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_session),
 ) -> ProductListResponse:
     
-    try:
-        df = load_catalog().copy()
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-    
-    if query:
-        q = query.strip().lower()
-        if q:
-            if "search_text" in df.columns:
-                mask = df["search_text"].str.contains(q, regex=False, na=False)
-            else:
-                mask = df["product_title"].str.lower().str.contains(q, regex=False, na=False)
-            df = df[mask].copy()
-        
-    total = len(df)
-    page_df = df.iloc[offset : offset + limit]
+    products = search_products(
+        session=session,
+        query=query,
+        limit=limit,
+    )
 
-    items = [catalog_row_to_product_card(row) for _, row in page_df.iterrows()]
-    return ProductListResponse(total=total, items=items)
+    items = [
+        ProductCard(
+            product_id=p.product_id,
+            product_title=p.product_title or "",
+            store=p.store,
+            main_category=p.main_category,
+            price=p.price,
+            average_rating=p.average_rating,
+            rating_number=p.rating_number,
+            review_count=p.review_count,
+            image_url=p.image_url,
+        )
+        for p in products
+    ]
+
+    return ProductListResponse(
+        items=items,
+        total=len(items),
+    )
 
 @app.get("/products/{product_id}", response_model=ProductCard)
-def get_product(product_id: str) -> ProductCard:
-    try:
-        df = load_catalog()
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+def get_product(
+    product_id: str,
+    session: Session = Depends(get_session),
+    ) -> ProductCard:
+    product = get_product_by_id(
+        session=session,
+        product_id=product_id,
+    )
 
-    matched = df[df["product_id"] == product_id]
-    if matched.empty:
-        raise HTTPException(status_code=404, detail=f"Product not found: {product_id}")
-
-    return catalog_row_to_product_card(matched.iloc[0])
+    if product is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    return ProductCard(
+        product_id=product.product_id,
+        product_title=product.product_title or "",
+        store=product.store,
+        main_category=product.main_category,
+        price=product.price,
+        average_rating=product.average_rating,
+        rating_number=product.rating_number,
+        review_count=product.review_count,
+        image_url=product.image_url,
+    )
 
 @app.post("/products/{product_id}/insights", response_model=InsightsResponse)
 def generate_product_insights(
@@ -237,3 +275,33 @@ def get_job_status(job_id: str) -> JobStatusResponse:
         result=result,
         error=error,
     )
+@app.get("/products/{product_id}/insights")
+def get_saved_product_insights(
+    product_id: str,
+    session: Session = Depends(get_session),
+):  
+    cache_key = product_insight_cache_key(
+        product_id=product_id,
+        model_version=settings.summary_model_version,
+    )
+    cached = get_json_cache(cache_key)
+
+    insight = get_product_insight(
+        session=session,
+        product_id=product_id,
+        model_version=settings.app_model_version,
+    )
+
+    if insight is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Product insight not found. Create a job first.",
+        )
+
+    set_json_cache(
+        key=cache_key,
+        value=insight.payload,
+        ttl_seconds=3600,
+    )
+    
+    return insight.payload

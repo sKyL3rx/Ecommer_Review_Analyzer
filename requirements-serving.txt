@@ -11,3 +11,6 @@ scikit-learn==1.8.0
 joblib==1.5.3
 pyarrow==23.0.1
 requests==2.32.4
+sqlalchemy
+psycopg[binary]
+alembic

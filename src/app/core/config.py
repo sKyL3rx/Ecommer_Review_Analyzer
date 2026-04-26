@@ -9,7 +9,11 @@ class Settings(BaseSettings):
     vllm_api_key: str = "demo-key"
     summary_model_name: str = "summary-sft"
 
-    app_model_version: str = "summary-sft-candidate"
+    app_model_version: str = "summary-sft"
+
+    summary_model_version: str = "summary-sft"
+
+    database_url: str = "postgresql+psycopg://ecom:ecom@localhost:5432/ecom_review"
 
     model_config = SettingsConfigDict(
         env_file=".env",
