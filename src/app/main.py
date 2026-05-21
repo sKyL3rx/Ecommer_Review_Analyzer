@@ -1,51 +1,20 @@
 from __future__ import annotations
 
-from pathlib import Path
-
-import pandas as pd
-from fastapi import FastAPI, HTTPException, Query
-
-import ast
-import json
-
-
-from src.app.schemas import (
-    InsightsRequest,
-    InsightsResponse,
-    ProductCard,
-    ProductListResponse,
-    InsightJobRequest,
-    InsightJobResponse,
-    JobStatusResponse,
-)
-
-from src.app.services.generate_product_insights import (
-    CATALOG_PATH,
-    ProductInsightsService,
-)
-
-from src.app.clients.sentiment_client import InferenceSentiment
-from src.app.clients.summarizer_client import VLLMSummaryGenerator
-
-from rq.job import Job
-
-from src.app.core.config import settings
-from src.app.jobs.queue import insight_queue, redis_conn
-from src.app.workers.insight_tasks import generate_product_insight_task
-from src.app.storage.db import init_db
-from fastapi import Depends
-from sqlalchemy.orm import Session
-
-from src.app.storage.db import get_session
-from src.app.storage.repositories import get_product_by_id, search_products, get_product_insight
-
-from src.app.storage.cache import (
-    get_json_cache,
-    product_insight_cache_key,
-    set_json_cache,
-)
-
+import time
 from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request
+
+from src.app.jobs.queue import insight_queue
+from src.app.monitoring.metrics import (
+    api_request_latency_seconds,
+    api_requests_total,
+    insight_queue_depth,
+    metrics_response,
+)
+from src.app.routes import health, insights, jobs, products
+from src.app.storage.db import init_db
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -58,250 +27,43 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-sentiment_model = InferenceSentiment()
-summarizer_client = VLLMSummaryGenerator(
-    base_url=settings.vllm_base_url,
-    api_key=settings.vllm_api_key,
-    model=settings.app_model_version,
-)
+@app.middleware("http")
+async def metrics_middleware(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    latency = time.perf_counter() - start
+
+    path = request.url.path
+    method = request.method
+    status_code = str(response.status_code)
+
+    api_requests_total.labels(
+        method=method,
+        path=path,
+        status_code=status_code,
+    ).inc()
 
 
-service = ProductInsightsService(
-    sentiment_predictor =sentiment_model,
-    summary_generator = summarizer_client
-)
+    api_request_latency_seconds.labels(
+        method=method,
+        path=path,
+    ).observe(latency)
 
-_catalog_df: pd.DataFrame | None = None
-
-def load_catalog() -> pd.DataFrame:
-    global _catalog_df
-
-    if _catalog_df is None:
-        if not CATALOG_PATH.exists():
-            raise FileNotFoundError(f"Missing catalog file: {CATALOG_PATH}")
-
-        df = pd.read_parquet(CATALOG_PATH)
-        df["product_id"] = df["product_id"].astype(str).str.strip()
-
-        for col in ["product_title", "store", "main_category", "price", "features_text", "description_text", "search_text"]:
-            if col in df.columns:
-                df[col] = df[col].fillna("").astype(str)
-
-        if "categories_list" in df.columns:
-            df["categories_list"] = df["categories_list"].apply(
-                lambda x: x if isinstance(x, list) else []
-            )
-
-        _catalog_df = df.reset_index(drop=True)
-
-    return _catalog_df
-
-def normalize_image_url(value: object) -> str | None:
-    if value is None or (isinstance(value, float) and pd.isna(value)):
-        return None
-
-    if isinstance(value, str):
-        text = value.strip()
-        if not text:
-            return None
-
-        if text.startswith("http://") or text.startswith("https://"):
-            return text
-
-        for loader in (json.loads, ast.literal_eval):
-            try:
-                parsed = loader(text)
-                return normalize_image_url(parsed)
-            except Exception:
-                pass
-
-        return None
-
-    if isinstance(value, list):
-        for item in value:
-            url = normalize_image_url(item)
-            if url:
-                return url
-        return None
-
-    if isinstance(value, dict):
-        for key in ["large", "hi_res", "thumb", "url", "image_url"]:
-            if key in value and value[key]:
-                return str(value[key]).strip()
-        return None
-
-    return None
+    return response
 
 
-def catalog_row_to_product_card(row: pd.Series) -> ProductCard:
-    return ProductCard(
-        product_id=str(row.get("product_id", "")).strip(),
-        product_title=str(row.get("product_title", "")).strip(),
-        store=str(row.get("store", "")).strip() or None,
-        main_category=str(row.get("main_category", "")).strip() or None,
-        price=str(row.get("price", "")).strip() or None,
-        average_rating=float(row["average_rating"]) if pd.notna(row.get("average_rating")) else None,
-        rating_number=int(row.get("rating_number", 0) or 0),
-        review_count=int(row.get("review_count", 0) or 0),
-        avg_review_rating=float(row.get("avg_review_rating", 0.0) or 0.0),
-        verified_review_count=int(row.get("verified_review_count", 0) or 0),
-        total_helpful_votes=int(row.get("total_helpful_votes", 0) or 0),
-        latest_review_ts=int(row["latest_review_ts"]) if pd.notna(row.get("latest_review_ts")) else None,
-        image_url=normalize_image_url(row.get("image_url")),
-        categories_list=row.get("categories_list", []) if isinstance(row.get("categories_list"), list) else [],
-        features_text=str(row.get("features_text", "")).strip() or None,
-        description_text=str(row.get("description_text", "")).strip() or None,
-    )
+@app.get("/metrics")
+def metrics():
+    insight_queue_depth.set(len(insight_queue))
+    return metrics_response()   
 
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+app.include_router(health.router)
+app.include_router(products.router)
+app.include_router(insights.router)
+app.include_router(jobs.router)
 
-@app.get("/products", response_model=ProductListResponse)
-def list_products(
-    query: str | None = Query(default=None),
-    limit: int = Query(default=20, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
-    session: Session = Depends(get_session),
-) -> ProductListResponse:
-    
-    products = search_products(
-        session=session,
-        query=query,
-        limit=limit,
-    )
 
-    items = [
-        ProductCard(
-            product_id=p.product_id,
-            product_title=p.product_title or "",
-            store=p.store,
-            main_category=p.main_category,
-            price=p.price,
-            average_rating=p.average_rating,
-            rating_number=p.rating_number,
-            review_count=p.review_count,
-            image_url=p.image_url,
-        )
-        for p in products
-    ]
 
-    return ProductListResponse(
-        items=items,
-        total=len(items),
-    )
 
-@app.get("/products/{product_id}", response_model=ProductCard)
-def get_product(
-    product_id: str,
-    session: Session = Depends(get_session),
-    ) -> ProductCard:
-    product = get_product_by_id(
-        session=session,
-        product_id=product_id,
-    )
 
-    if product is None:
-        raise HTTPException(status_code=404, detail="Product not found")
-    
-    return ProductCard(
-        product_id=product.product_id,
-        product_title=product.product_title or "",
-        store=product.store,
-        main_category=product.main_category,
-        price=product.price,
-        average_rating=product.average_rating,
-        rating_number=product.rating_number,
-        review_count=product.review_count,
-        image_url=product.image_url,
-    )
 
-@app.post("/products/{product_id}/insights", response_model=InsightsResponse)
-def generate_product_insights(
-    product_id: str,
-    payload: InsightsRequest,
-) -> InsightsResponse:
-    try:
-        result = service.generate(
-            product_id=product_id,
-            max_reviews=payload.max_reviews,
-            representative_k=payload.representative_k,
-            regenerate=payload.regenerate,
-        )
-        return InsightsResponse(**result)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-    
-@app.post(
-    "/products/{product_id}/insights/jobs",
-    response_model=InsightJobResponse,
-)
-def create_insight_job(
-    product_id: str,
-    payload: InsightJobRequest,
-    ) -> InsightJobResponse:
-    job = insight_queue.enqueue(
-        generate_product_insight_task,
-        product_id,
-        payload.max_reviews,
-        payload.representative_k,
-        payload.regenerate,
-        job_timeout="15m",
-        result_ttl=86400,
-        failure_ttl=86400,
-    )
-    
-    return InsightJobResponse(
-        job_id=job.id,
-        status=job.get_status(),
-        product_id=product_id,
-    )
-
-@app.get("/jobs/{job_id}", response_model=JobStatusResponse)
-def get_job_status(job_id: str) -> JobStatusResponse:
-    try:
-        job = Job.fetch(job_id, connection = redis_conn)
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}") 
-    
-    result = job.result if job.is_finished else None
-    error = str(job.exc_info) if job.is_failed else None
-
-    return JobStatusResponse(
-        job_id=job.id,
-        status=job.get_status(),
-        result=result,
-        error=error,
-    )
-@app.get("/products/{product_id}/insights")
-def get_saved_product_insights(
-    product_id: str,
-    session: Session = Depends(get_session),
-):  
-    cache_key = product_insight_cache_key(
-        product_id=product_id,
-        model_version=settings.summary_model_version,
-    )
-    cached = get_json_cache(cache_key)
-
-    insight = get_product_insight(
-        session=session,
-        product_id=product_id,
-        model_version=settings.app_model_version,
-    )
-
-    if insight is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Product insight not found. Create a job first.",
-        )
-
-    set_json_cache(
-        key=cache_key,
-        value=insight.payload,
-        ttl_seconds=3600,
-    )
-    
-    return insight.payload

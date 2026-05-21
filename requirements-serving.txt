@@ -14,3 +14,4 @@ requests==2.32.4
 sqlalchemy
 psycopg[binary]
 alembic
+prometheus-client

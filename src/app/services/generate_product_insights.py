@@ -8,7 +8,6 @@ from typing import Any, Callable
 import numpy as np
 import pandas as pd
 
-
 CATALOG_PATH = Path("data/serving/appliances_demo_catalog.parquet")
 REVIEWS_PATH = Path("data/serving/appliances_demo_reviews.parquet")
 CACHE_DIR = Path("data/cache/product_insights")

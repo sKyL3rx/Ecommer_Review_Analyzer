@@ -6,6 +6,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from src.app.storage.db import Base
 
+
 class Product(Base):
     __tablename__ = "products"
 

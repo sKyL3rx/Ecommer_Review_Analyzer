@@ -5,6 +5,7 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from src.app.core.config import settings
 
+
 class Base(DeclarativeBase):
     pass
 
@@ -20,7 +21,6 @@ SessionLocal = sessionmaker(
 )
 
 def init_db() -> None:
-    from src.app.storage import models
     Base.metadata.create_all(bind=engine)
 
 def get_session() -> Generator[Session, None, None]:

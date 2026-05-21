@@ -1,8 +1,9 @@
 from sqlalchemy import or_, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from src.app.storage.models import Product, ProductInsight, Review
-from sqlalchemy.dialects.postgresql import insert
+
 
 def search_products(
     session: Session,

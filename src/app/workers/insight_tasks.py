@@ -2,6 +2,7 @@ from src.app.clients.sentiment_client import InferenceSentiment
 from src.app.clients.summarizer_client import VLLMSummaryGenerator
 from src.app.core.config import settings
 from src.app.services.generate_product_insights import ProductInsightsService
+from src.app.storage.cache import product_insight_cache_key, set_json_cache
 from src.app.storage.converters import product_to_info, reviews_to_dataframe
 from src.app.storage.db import SessionLocal
 from src.app.storage.repositories import (
@@ -10,7 +11,6 @@ from src.app.storage.repositories import (
     save_product_insight,
 )
 
-from src.app.storage.cache import product_insight_cache_key, set_json_cache
 
 def generate_product_insight_task(
     product_id: str,
@@ -24,13 +24,13 @@ def generate_product_insight_task(
     summarizer_client = VLLMSummaryGenerator(
         base_url=settings.vllm_base_url,
         api_key=settings.vllm_api_key,
-        model=settings.app_model_version,
+        model=settings.summary_model_name,
     )
 
     service = ProductInsightsService(
         sentiment_predictor=sentiment_model,
         summary_generator=summarizer_client,
-        model_version=settings.app_model_version,
+        model_version=settings.summary_model_version,
     )
 
     with SessionLocal() as session:

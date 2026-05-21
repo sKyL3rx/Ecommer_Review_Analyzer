@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "feat/**"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: ecom_review
+          POSTGRES_USER: ecom
+          POSTGRES_PASSWORD: ecom
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ecom -d ecom_review"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql+psycopg://ecom:ecom@localhost:5432/ecom_review
+      REDIS_URL: redis://localhost:6379/0
+      VLLM_BASE_URL: http://localhost:8001/v1
+      VLLM_API_KEY: demo-key
+      SUMMARY_MODEL_NAME: summary-sft
+      SUMMARY_MODEL_VERSION: summary-sft
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+        
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-serving.txt
+          pip install -r requirements-dev.txt
+      
+      - name: Run Ruff
+        run: |
+          ruff check src scripts tests
+
+      - name: Run tests
+        run: |
+          python -m pytest -q
+      
+      - name: Build Docker image
+        run: |
+          docker build -t ecommerce-review-analyzer:ci .

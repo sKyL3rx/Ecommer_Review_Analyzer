@@ -1,19 +1,17 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
 class Settings(BaseSettings):
     app_name: str = "Product Review Intelligence API"
 
     redis_url: str = "redis://localhost:6379/0"
+    database_url: str = "postgresql+psycopg://ecom:ecom@localhost:5432/ecom_review"
 
     vllm_base_url: str = "http://127.0.0.1:8001/v1"
     vllm_api_key: str = "demo-key"
+
     summary_model_name: str = "summary-sft"
-
-    app_model_version: str = "summary-sft"
-
     summary_model_version: str = "summary-sft"
-
-    database_url: str = "postgresql+psycopg://ecom:ecom@localhost:5432/ecom_review"
 
     model_config = SettingsConfigDict(
         env_file=".env",

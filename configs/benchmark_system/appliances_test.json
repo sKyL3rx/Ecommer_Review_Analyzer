@@ -1,0 +1,10 @@
+{
+  "name": "appliances_test",
+  "description": "System benchmark using product_ids selected from test.csv.",
+  "csv_path": "data/benchmark_system/test.csv",
+  "product_id_column": "product_id",
+  "top_k_products": 100,
+  "min_reviews_per_product": 20,
+  "max_reviews": 100,
+  "representative_k": 5
+}

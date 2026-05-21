@@ -83,10 +83,11 @@ class InsightJobRequest(BaseModel):
 
 
 class InsightJobResponse(BaseModel):
-    job_id: str
+    job_id: str | None = None
     status: str
     product_id: str
-
+    cached: bool = False
+    message: str | None = None
 
 class JobStatusResponse(BaseModel):
     job_id: str
