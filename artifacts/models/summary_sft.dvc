@@ -1,0 +1,6 @@
+outs:
+- md5: a7244ab799edb3fedecb07a91e08be6c.dir
+  size: 514381272
+  nfiles: 32
+  hash: md5
+  path: summary_sft
