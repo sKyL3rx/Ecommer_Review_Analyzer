@@ -42,3 +42,13 @@ class VLLMSummaryGenerator:
 
         data = resp.json()
         return data["choices"][0]["message"]["content"].strip()
+
+
+class FakeSummaryGenerator:
+    def __call__(self, prompt: str, context: dict[str, Any]) -> str:
+        sentiment_label = context.get("sentiment_label", "unknown")
+        review_count = context.get("review_count", 0)
+        return (
+            f"Mock {sentiment_label} summary generated from {review_count} "
+            "representative reviews. This is used for CI and local tests."
+        )

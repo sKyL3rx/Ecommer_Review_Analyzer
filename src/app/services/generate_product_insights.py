@@ -8,6 +8,11 @@ from typing import Any, Callable
 import numpy as np
 import pandas as pd
 
+from src.app.monitoring.metrics import (
+    sentiment_source_total,
+    summary_generation_duration_seconds,
+)
+
 CATALOG_PATH = Path("data/serving/appliances_demo_catalog.parquet")
 REVIEWS_PATH = Path("data/serving/appliances_demo_reviews.parquet")
 CACHE_DIR = Path("data/cache/product_insights")
@@ -121,6 +126,46 @@ def all_positive_sentiment_predictor(texts: list[str]) -> list[dict[str, Any]]:
     ]
 
 
+VALID_SENTIMENT_LABELS = {"positive", "neutral", "negative"}
+
+
+def sentiment_from_rating(rating: Any) -> str | None:
+    try:
+        if rating is None or pd.isna(rating):
+            return None
+
+        rating_value = float(rating)
+
+        if rating_value >= 4.0:
+            return "positive"
+        if rating_value == 3.0:
+            return "neutral"
+        if rating_value <= 2.0:
+            return "negative"
+
+        return None
+    except Exception:
+        return None
+
+
+def normalize_sentiment_label(value: Any) -> str | None:
+    label = clean_text(value).lower()
+    if label in VALID_SENTIMENT_LABELS:
+        return label
+    return None
+
+
+def normalize_confidence(value: Any, default: float = 1.0) -> float:
+    try:
+        if value is None or pd.isna(value):
+            return default
+
+        conf = float(value)
+        return max(0.0, min(1.0, conf))
+    except Exception:
+        return default
+
+
 def fallback_summary_generator(prompt: str, context: dict[str, Any]) -> str:
     sentiment_label = context.get("sentiment_label", "unknown")
     count = context.get("review_count", 0)
@@ -175,7 +220,9 @@ class ProductInsightsService:
 
     def _cache_path(self, product_id: str) -> Path:
         ensure_cache_dir(self.cache_dir)
-        safe_product_id = "".join(ch if ch.isalnum() or ch in {"_", "-"} else "_" for ch in product_id)
+        safe_product_id = "".join(
+            ch if ch.isalnum() or ch in {"_", "-"} else "_" for ch in product_id
+        )
         return self.cache_dir / f"{safe_product_id}.json"
 
     def _load_product_info(self, product_id: str) -> dict[str, Any]:
@@ -193,15 +240,21 @@ class ProductInsightsService:
             "store": clean_text(row.get("store")),
             "main_category": clean_text(row.get("main_category")),
             "price": clean_text(row.get("price")),
-            "average_rating": float(row.get("average_rating")) if pd.notna(row.get("average_rating")) else None,
+            "average_rating": float(row.get("average_rating"))
+            if pd.notna(row.get("average_rating"))
+            else None,
             "rating_number": int(row.get("rating_number", 0) or 0),
             "review_count": int(row.get("review_count", 0) or 0),
             "avg_review_rating": float(row.get("avg_review_rating", 0.0) or 0.0),
             "verified_review_count": int(row.get("verified_review_count", 0) or 0),
             "total_helpful_votes": int(row.get("total_helpful_votes", 0) or 0),
-            "latest_review_ts": int(row.get("latest_review_ts")) if pd.notna(row.get("latest_review_ts")) else None,
+            "latest_review_ts": int(row.get("latest_review_ts"))
+            if pd.notna(row.get("latest_review_ts"))
+            else None,
             "image_url": clean_text(row.get("image_url")),
-            "categories_list": row.get("categories_list") if isinstance(row.get("categories_list"), list) else [],
+            "categories_list": row.get("categories_list")
+            if isinstance(row.get("categories_list"), list)
+            else [],
             "features_text": clean_text(row.get("features_text")),
             "description_text": clean_text(row.get("description_text")),
             "search_text": clean_text(row.get("search_text")),
@@ -221,9 +274,6 @@ class ProductInsightsService:
         reviews_df: pd.DataFrame,
         max_reviews: int = 100,
     ) -> pd.DataFrame:
-        """
-        Bước 1: từ tất cả reviews của product, lấy ra một tập nhỏ hơn để phân tích.
-        """
         scored = add_quality_score(reviews_df)
 
         scored = scored.sort_values(
@@ -244,29 +294,61 @@ class ProductInsightsService:
         return scored.head(max_reviews).copy()
 
     def _predict_sentiment(self, reviews_df: pd.DataFrame) -> pd.DataFrame:
-        texts = reviews_df["review_text"].fillna("").astype(str).tolist()
-        predictions = self.sentiment_predictor(texts)
-
-        if len(predictions) != len(reviews_df):
-            raise ValueError("Sentiment predictor returned wrong number of predictions.")
-
-        labels: list[str] = []
-        confidences: list[float] = []
-
-        for pred in predictions:
-            label = str(pred.get("sentiment_label", "positive")).strip().lower()
-            if label not in {"positive", "neutral", "negative"}:
-                label = "positive"
-
-            conf = float(pred.get("sentiment_confidence", 1.0))
-            conf = max(0.0, min(1.0, conf))
-
-            labels.append(label)
-            confidences.append(conf)
-
         out = reviews_df.copy()
-        out["sentiment_label"] = labels
-        out["sentiment_confidence"] = confidences
+
+        labels: list[str | None] = [None] * len(out)
+        confidences: list[float | None] = [None] * len(out)
+        sources: list[str | None] = [None] * len(out)
+
+        if "predicted_sentiment" in out.columns:
+            for idx, value in enumerate(out["predicted_sentiment"].tolist()):
+                label = normalize_sentiment_label(value)
+                if label is not None:
+                    labels[idx] = label
+                    raw_conf = (
+                        out.iloc[idx].get("sentiment_confidence")
+                        if "sentiment_confidence" in out.columns
+                        else None
+                    )
+                    confidences[idx] = normalize_confidence(raw_conf, default=1.0)
+                    sources[idx] = "precomputed"
+
+        if "rating" in out.columns:
+            for idx, value in enumerate(out["rating"].tolist()):
+                if labels[idx] is not None:
+                    continue
+
+                label = sentiment_from_rating(value)
+                if label is not None:
+                    labels[idx] = label
+                    confidences[idx] = 1.0
+                    sources[idx] = "rating"
+
+        missing_indices = [idx for idx, label in enumerate(labels) if label is None]
+
+        if missing_indices:
+            texts = out.iloc[missing_indices]["review_text"].fillna("").astype(str).tolist()
+
+            predictions = self.sentiment_predictor(texts)
+
+            if len(predictions) != len(missing_indices):
+                raise ValueError("Sentiment predictor returned different number of predictions")
+
+            for idx, pred in zip(missing_indices, predictions):
+                label = normalize_sentiment_label(pred.get("sentiment_label")) or "positive"
+                conf = normalize_confidence(pred.get("sentiment_confidence"), default=1.0)
+
+                labels[idx] = label
+                confidences[idx] = conf
+                sources[idx] = "model"
+
+        out["sentiment_label"] = [label or "positive" for label in labels]
+        out["sentiment_confidence"] = [
+            float(conf if conf is not None else 1.0) for conf in confidences
+        ]
+
+        out["sentiment_source"] = [source or "fallback" for source in sources]
+
         return out
 
     def _build_sentiment_distribution(self, reviews_df: pd.DataFrame) -> dict[str, Any]:
@@ -330,7 +412,9 @@ class ProductInsightsService:
                     "helpful_vote": int(row.get("helpful_vote", 0) or 0),
                     "verified_purchase": bool(row.get("verified_purchase", False)),
                     "review_quality_score": round(float(row.get("review_quality_score", 0.0)), 4),
-                    "timestamp": int(row.get("timestamp")) if pd.notna(row.get("timestamp")) else None,
+                    "timestamp": int(row.get("timestamp"))
+                    if pd.notna(row.get("timestamp"))
+                    else None,
                     "review_datetime": review_datetime,
                 }
             )
@@ -374,13 +458,14 @@ Requirements:
         if not representative_reviews:
             return ""
 
-        result = self.summary_generator(
-            prompt,
-            {
-                "sentiment_label": sentiment_label,
-                "review_count": len(representative_reviews),
-            },
-        )
+        with summary_generation_duration_seconds.labels(sentiment=sentiment_label).time():
+            result = self.summary_generator(
+                prompt,
+                {
+                    "sentiment_label": sentiment_label,
+                    "review_count": len(representative_reviews),
+                },
+            )
 
         if isinstance(result, dict):
             return clean_text(result.get("summary"))
@@ -396,7 +481,7 @@ Requirements:
         product_info: dict[str, Any] | None = None,
         reviews_df: pd.DataFrame | None = None,
         use_file_cache: bool = True,
-        ) -> dict[str, Any]:
+    ) -> dict[str, Any]:
         product_id = clean_text(product_id)
         if not product_id:
             raise ValueError("product_id must not be empty.")
@@ -417,12 +502,8 @@ Requirements:
             all_reviews_df = reviews_df.copy()
 
             if "product_id" in all_reviews_df.columns:
-                all_reviews_df["product_id"] = (
-                    all_reviews_df["product_id"].astype(str).str.strip()
-                    )
-                all_reviews_df = all_reviews_df[
-                    all_reviews_df["product_id"] == product_id
-                    ].copy()
+                all_reviews_df["product_id"] = all_reviews_df["product_id"].astype(str).str.strip()
+                all_reviews_df = all_reviews_df[all_reviews_df["product_id"] == product_id].copy()
 
             if all_reviews_df.empty:
                 raise ValueError(f"No reviews found for product_id={product_id}")
@@ -431,12 +512,21 @@ Requirements:
 
         # Step 1: choose top N reviews for this product
         selected_reviews_df = self._select_reviews_for_inference(
-        all_reviews_df,
-        max_reviews=max_reviews,
+            all_reviews_df,
+            max_reviews=max_reviews,
         )
 
         # Step 2: predict sentiment
         scored_reviews_df = self._predict_sentiment(selected_reviews_df)
+
+        sentiment_source_counts_raw = (
+            scored_reviews_df["sentiment_source"].value_counts().to_dict()
+            if "sentiment_source" in scored_reviews_df.columns
+            else {}
+        )
+
+        for source, count in sentiment_source_counts_raw.items():
+            sentiment_source_total.labels(source=str(source)).inc(int(count))
 
         # Step 3: build sentiment distribution
         sentiment_distribution = self._build_sentiment_distribution(scored_reviews_df)
@@ -444,72 +534,72 @@ Requirements:
         # Step 4: pick representative reviews for each sentiment
         representative_reviews = {
             "positive": self._pick_representative_reviews(
-            scored_reviews_df,
-            sentiment_label="positive",
-            top_k=representative_k,
-        ),
-        "neutral": self._pick_representative_reviews(
-            scored_reviews_df,
-            sentiment_label="neutral",
-            top_k=representative_k,
-        ),
-        "negative": self._pick_representative_reviews(
-            scored_reviews_df,
-            sentiment_label="negative",
-            top_k=representative_k,
-        ),
+                scored_reviews_df,
+                sentiment_label="positive",
+                top_k=representative_k,
+            ),
+            "neutral": self._pick_representative_reviews(
+                scored_reviews_df,
+                sentiment_label="neutral",
+                top_k=representative_k,
+            ),
+            "negative": self._pick_representative_reviews(
+                scored_reviews_df,
+                sentiment_label="negative",
+                top_k=representative_k,
+            ),
         }
 
-        # Step 5: build prompts safely
+        # Step 5: build prompts
         positive_prompt = ""
         neutral_prompt = ""
         negative_prompt = ""
 
         if representative_reviews["positive"]:
             positive_prompt = self._build_sentiment_prompt(
-            product_info=product_info,
-            sentiment_label="positive",
-            representative_reviews=representative_reviews["positive"],
-        )
+                product_info=product_info,
+                sentiment_label="positive",
+                representative_reviews=representative_reviews["positive"],
+            )
 
         if representative_reviews["neutral"]:
             neutral_prompt = self._build_sentiment_prompt(
-            product_info=product_info,
-            sentiment_label="neutral",
-            representative_reviews=representative_reviews["neutral"],
-        )
+                product_info=product_info,
+                sentiment_label="neutral",
+                representative_reviews=representative_reviews["neutral"],
+            )
 
         if representative_reviews["negative"]:
             negative_prompt = self._build_sentiment_prompt(
-            product_info=product_info,
-            sentiment_label="negative",
-            representative_reviews=representative_reviews["negative"],
-        )
+                product_info=product_info,
+                sentiment_label="negative",
+                representative_reviews=representative_reviews["negative"],
+            )
 
-        # Step 6: summarize safely
+        # Step 6: summarize 
         positive_summary = ""
         neutral_summary = ""
         negative_summary = ""
 
         if representative_reviews["positive"]:
             positive_summary = self._generate_sentiment_summary(
-            positive_prompt,
-            sentiment_label="positive",
-            representative_reviews=representative_reviews["positive"],
-        )
+                positive_prompt,
+                sentiment_label="positive",
+                representative_reviews=representative_reviews["positive"],
+            )
 
         if representative_reviews["neutral"]:
             neutral_summary = self._generate_sentiment_summary(
-            neutral_prompt,
-            sentiment_label="neutral",
-            representative_reviews=representative_reviews["neutral"],
+                neutral_prompt,
+                sentiment_label="neutral",
+                representative_reviews=representative_reviews["neutral"],
             )
 
         if representative_reviews["negative"]:
             negative_summary = self._generate_sentiment_summary(
-            negative_prompt,
-            sentiment_label="negative",
-            representative_reviews=representative_reviews["negative"],
+                negative_prompt,
+                sentiment_label="negative",
+                representative_reviews=representative_reviews["negative"],
             )
 
         latency_ms = round((time.perf_counter() - start) * 1000, 2)
@@ -518,6 +608,12 @@ Requirements:
             "product_id": product_info["product_id"],
             "product_info": product_info,
             "sentiment_distribution": sentiment_distribution,
+            "sentiment_source_counts": {
+                "precomputed": int(sentiment_source_counts_raw.get("precomputed", 0)),
+                "rating": int(sentiment_source_counts_raw.get("rating", 0)),
+                "model": int(sentiment_source_counts_raw.get("model", 0)),
+                "fallback": int(sentiment_source_counts_raw.get("fallback", 0)),
+            },
             "representative_reviews": representative_reviews,
             "prompts": {
                 "positive": positive_prompt,
@@ -541,4 +637,3 @@ Requirements:
                 json.dump(response, f, ensure_ascii=False, indent=2)
 
         return response
-

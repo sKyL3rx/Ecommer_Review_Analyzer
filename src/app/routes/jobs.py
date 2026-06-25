@@ -1,4 +1,3 @@
-
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -17,12 +16,9 @@ router = APIRouter(tags=["jobs"])
 def get_job_status(
     job_id: str,
     session: Session = Depends(get_session),
-    ) -> JobStatusResponse:
+) -> JobStatusResponse:
     """
     Poll RQ job status.
-
-    Redis/RQ is the source of truth for live job state.
-    Postgres insight_jobs is updated as persistent job metadata.
     """
     try:
         job = Job.fetch(job_id, connection=redis_conn)
@@ -45,7 +41,7 @@ def get_job_status(
             db_job.finished_at = datetime.utcnow()
 
         session.commit()
-    
+
     return JobStatusResponse(
         job_id=job.id,
         status=status,

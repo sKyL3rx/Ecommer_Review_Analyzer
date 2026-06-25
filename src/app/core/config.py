@@ -13,10 +13,17 @@ class Settings(BaseSettings):
     summary_model_name: str = "summary-sft"
     summary_model_version: str = "summary-sft"
 
+    use_fake_summarizer: bool = False
+    use_fake_sentiment: bool = False
+    auto_create_tables: bool = False
+
+    redis_cache_ttl_seconds: int = 3600
+
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore",
         protected_namespaces=("settings_",),
     )
+
 
 settings = Settings()

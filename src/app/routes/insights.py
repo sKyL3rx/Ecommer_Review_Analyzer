@@ -16,6 +16,7 @@ from src.app.workers.insight_tasks import generate_product_insight_task
 
 router = APIRouter(tags=["insights"])
 
+
 @router.post(
     "/products/{product_id}/insights/jobs",
     response_model=InsightJobResponse,
@@ -24,7 +25,7 @@ def create_insight_job(
     product_id: str,
     payload: InsightJobRequest,
     session: Session = Depends(get_session),
-    ) -> InsightJobResponse:
+) -> InsightJobResponse:
     """
     Async write/generation path.
 
@@ -32,10 +33,10 @@ def create_insight_job(
     1. Enqueue RQ job.
     2. Worker reads product/reviews from Postgres.
     3. Worker runs service.generate().
-    4. Worker calls vLLM.
+    4. Worker classifies sentiment and calls vLLM to generate summarization.
     5. Worker saves result to Postgres + Redis cache.
 
-    Note: If an insight already exists and regenerate=false, return immediately
+    If an insight already exists and regenerate=false, return immediately
     instead of enqueueing.
     """
 
@@ -68,7 +69,7 @@ def create_insight_job(
             set_json_cache(
                 key=cache_key,
                 value=existing.payload,
-                ttl_seconds=3600,
+                ttl_seconds=settings.redis_cache_ttl_seconds
             )
 
             return InsightJobResponse(
@@ -77,8 +78,7 @@ def create_insight_job(
                 product_id=product_id,
                 cached=False,
                 message=(
-                    "Insight already exists in Postgres. "
-                    "Use regenerate=true to enqueue a new job."
+                    "Insight already exists in Postgres. Use regenerate=true to enqueue a new job."
                 ),
             )
 
@@ -111,11 +111,12 @@ def create_insight_job(
         message="Insight generation job enqueued.",
     )
 
+
 @router.get("/products/{product_id}/insights")
 def get_saved_product_insights(
     product_id: str,
     session: Session = Depends(get_session),
-):  
+):
     """
     Read path for generated product insights.
 
@@ -125,7 +126,6 @@ def get_saved_product_insights(
     3. Store Postgres result into Redis.
     4. Return saved insight payload.
 
-    This endpoint does NOT generate new insights.
     """
     cache_key = product_insight_cache_key(
         product_id=product_id,
@@ -134,7 +134,7 @@ def get_saved_product_insights(
     cached = get_json_cache(cache_key)
     if cached is not None:
         return cached
-    
+
     insight = get_product_insight(
         session=session,
         product_id=product_id,

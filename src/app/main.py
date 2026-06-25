@@ -1,25 +1,26 @@
 from __future__ import annotations
 
-import time
 from contextlib import asynccontextmanager
+from time import perf_counter
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 
-from src.app.jobs.queue import insight_queue
+from src.app.core.config import settings
 from src.app.monitoring.metrics import (
     api_request_latency_seconds,
     api_requests_total,
-    insight_queue_depth,
-    metrics_response,
 )
 from src.app.routes import health, insights, jobs, products
+from src.app.routes import metrics as metrics_routes
 from src.app.storage.db import init_db
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
+    if settings.auto_create_tables:
+        init_db()
     yield
+
 
 app = FastAPI(
     title="Product Review Intelligence API",
@@ -27,43 +28,42 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
 @app.middleware("http")
-async def metrics_middleware(request: Request, call_next):
-    start = time.perf_counter()
-    response = await call_next(request)
-    latency = time.perf_counter() - start
+async def record_api_metrics(request, call_next):
+    start = perf_counter()
+    method = request.method
+    status_code = "500"
 
     path = request.url.path
-    method = request.method
-    status_code = str(response.status_code)
 
-    api_requests_total.labels(
-        method=method,
-        path=path,
-        status_code=status_code,
-    ).inc()
+    try:
+        response = await call_next(request)
+        status_code = str(response.status_code)
 
+        route = request.scope.get("route")
+        path = getattr(route, "path", request.url.path)
 
-    api_request_latency_seconds.labels(
-        method=method,
-        path=path,
-    ).observe(latency)
+        return response
 
-    return response
+    finally:
+        duration_seconds = perf_counter() - start
 
+        api_requests_total.labels(
+            method=method,
+            path=path,
+            status_code=status_code,
+        ).inc()
 
-@app.get("/metrics")
-def metrics():
-    insight_queue_depth.set(len(insight_queue))
-    return metrics_response()   
+        api_request_latency_seconds.labels(
+            method=method,
+            path=path,
+            status_code=status_code,
+        ).observe(duration_seconds)
+
 
 app.include_router(health.router)
 app.include_router(products.router)
 app.include_router(insights.router)
 app.include_router(jobs.router)
-
-
-
-
-
-
+app.include_router(metrics_routes.router)

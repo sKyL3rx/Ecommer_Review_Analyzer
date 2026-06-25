@@ -23,9 +23,11 @@ class ProductCard(BaseModel):
     features_text: str | None = None
     description_text: str | None = None
 
+
 class ProductListResponse(BaseModel):
     total: int
     items: list[ProductCard]
+
 
 class RepresentativeReview(BaseModel):
     review_id: str
@@ -40,6 +42,7 @@ class RepresentativeReview(BaseModel):
     timestamp: int | None = None
     review_datetime: str | None = None
 
+
 class SentimentCounts(BaseModel):
     positive: int = 0
     neutral: int = 0
@@ -51,10 +54,12 @@ class SentimentRatios(BaseModel):
     neutral: float = 0.0
     negative: float = 0.0
 
+
 class SentimentDistribution(BaseModel):
     counts: SentimentCounts
     ratios: SentimentRatios
     total: int
+
 
 class InsightsRequest(BaseModel):
     max_reviews: int = 100
@@ -75,7 +80,6 @@ class InsightsResponse(BaseModel):
     model_version: str
 
 
-
 class InsightJobRequest(BaseModel):
     max_reviews: int = 100
     representative_k: int = 5
@@ -88,6 +92,7 @@ class InsightJobResponse(BaseModel):
     product_id: str
     cached: bool = False
     message: str | None = None
+
 
 class JobStatusResponse(BaseModel):
     job_id: str
