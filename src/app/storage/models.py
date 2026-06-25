@@ -33,6 +33,7 @@ class Product(Base):
     description_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     search_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+
 class Review(Base):
     __tablename__ = "reviews"
 
@@ -42,6 +43,7 @@ class Review(Base):
     review_title: Mapped[str | None] = mapped_column(Text, nullable=True)
     review_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     review_char_len: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rating: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     timestamp: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     review_datetime: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -53,6 +55,7 @@ class Review(Base):
     predicted_sentiment: Mapped[str | None] = mapped_column(String, nullable=True)
     sentiment_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
 
+
 class ProductInsight(Base):
     __tablename__ = "product_insights"
 
@@ -60,6 +63,7 @@ class ProductInsight(Base):
     model_version: Mapped[str] = mapped_column(String, primary_key=True)
     payload: Mapped[dict] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
 
 class InsightJob(Base):
     __tablename__ = "insight_jobs"

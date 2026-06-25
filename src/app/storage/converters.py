@@ -45,6 +45,9 @@ def reviews_to_dataframe(reviews: list[Review]) -> pd.DataFrame:
                 "has_review_image": bool(r.has_review_image)
                 if r.has_review_image is not None
                 else False,
+                "rating": r.rating,
+                "predicted_sentiment": r.predicted_sentiment,
+                "sentiment_confidence": r.sentiment_confidence,
             }
             for r in reviews
         ]
