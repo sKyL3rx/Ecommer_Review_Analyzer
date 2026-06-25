@@ -4,6 +4,7 @@
 
 # Python env / cache
 .venv/
+.venv-serving/
 venv/
 __pycache__/
 *.pyc
@@ -30,12 +31,15 @@ artifacts/*
 !artifacts/models/
 artifacts/models/*
 !artifacts/models/summary_sft.dvc
+!artifacts/models/sentiment_model.joblib
+!artifacts/models/tfidf.joblib
 *.log
 logs/
 
-# DVC cache/temp - keep .dvc/config, ignore cache only
+# DVC cache/temp - keep .dvc/config, ignore cache
 .dvc/cache/
 .dvc/tmp/
+.dvc/config.local
 
 
 # Data 
@@ -46,7 +50,7 @@ data/benchmark/
 data/benchmark_system/
 data/serving/
 
-# DVC pointer files needed by initContainer
+# DVC pointer files
 !data/serving.dvc
 !data/.gitignore
 

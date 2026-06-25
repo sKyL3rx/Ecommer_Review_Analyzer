@@ -1,38 +1,47 @@
 .venv/
+.venv-serving/
 __pycache__/
 *.pyc
+
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Data
 data/raw/
 data/interim/
 data/processed/**
 data/cache/**
 data/serving/**
-data/benchmark_system
-!data/serving.dvc
-!data/serving/*.dvc
-!data/processed/**/
-!data/processed/**/*.dvc
+data/benchmark_system/
+!data/**/.gitkeep
+!data/**/*.dvc
 
+# Artifacts
 artifacts/**
 !artifacts/**/
 !artifacts/**/*.dvc
+!artifacts/reports/
+!artifacts/reports/*.json
+!artifacts/eval/
+!artifacts/eval/*.json
+!artifacts/benchmarks/
+!artifacts/benchmarks/*.json
 
-mlruns/
+# MLflow local
+mlflow/
 mlflow.db
+mlruns/
 mlartifacts/
 
-.ipynb_checkpoints/
-
-.env
-.env.*
-!.env.example
-README.md
-
+# Cache
 .pytest_cache/
 .ruff_cache/
 .coverage
 htmlcov/
 
-
+# Terraform local
 .terraform/
 *.tfstate
 *.tfstate.*
@@ -41,6 +50,7 @@ htmlcov/
 crash.log
 crash.*.log
 
+# All models files
 *.pt
 *.pth
 *.ckpt
@@ -49,5 +59,7 @@ crash.*.log
 *.pkl
 *.joblib
 
-#DVC
-dvc.yaml
+# OS/editor
+.DS_Store
+.vscode/
+.idea/

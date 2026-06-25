@@ -18,4 +18,6 @@ RUN pip install --no-cache-dir --upgrade pip \
 
 COPY . .
 
+RUN mkdir -p .dvc && printf "\n[core]\n    no_scm = true\n" > .dvc/config.local
+
 EXPOSE 8000

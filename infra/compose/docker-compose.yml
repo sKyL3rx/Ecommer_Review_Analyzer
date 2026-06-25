@@ -72,6 +72,33 @@ services:
       retries: 10
     restart: unless-stopped
   
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:latest
+    container_name: ecom-mlflow
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --serve-artifacts
+      --artifacts-destination /mlflow/mlartifacts
+    ports:
+      - "5000:5000"
+    volumes:
+      - ../../mlflow:/mlflow
+  migrate:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    command: alembic upgrade head
+    environment:
+      PYTHONPATH: /app
+      DATABASE_URL: postgresql+psycopg://ecom:ecom@postgres:5432/ecom_review
+    volumes:
+      - ../..:/app
+    depends_on:
+      postgres:
+        condition: service_healthy    
 volumes:
   redis_data:
   postgres_data:
