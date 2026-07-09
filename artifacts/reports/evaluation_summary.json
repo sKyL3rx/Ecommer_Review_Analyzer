@@ -1,0 +1,13 @@
+{
+  "test_rows": 29572,
+  "test_label_distribution": {
+    "positive": 24617,
+    "negative": 3379,
+    "neutral": 1576
+  },
+  "predicted_label_distribution": {
+    "positive": 22534,
+    "negative": 3813,
+    "neutral": 3225
+  }
+}
