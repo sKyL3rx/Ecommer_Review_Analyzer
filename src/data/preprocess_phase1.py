@@ -32,7 +32,7 @@ REQUIRED_REVIEW_COLUMNS = {
 }
 
 
-#REGEX patterns for cleaning text (e.g. removing HTML tags)
+# removing HTML tags
 HTML_TAG_RE = re.compile(r"<[^>]+>")
 
 PUNCT_TO_REMOVE = string.punctuation.replace("?", "").replace("!", "")
@@ -40,17 +40,15 @@ PUNCT_TRANSLATION_TABLE = str.maketrans("", "", PUNCT_TO_REMOVE)
 
 
 def parser_args() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description= "Preprocess the raw data for PHASE 1" \
-    "(1) review-level sentiment classification")
+    parser = argparse.ArgumentParser(
+        description="Preprocess the raw data for PHASE 1(1) review-level sentiment classification"
+    )
 
     parser.add_argument(
         "--input_reviews",
         type=Path,
         default=None,
-        help=(
-            "Path to raw review CSV"
-            "data/raw/appliances_reviews_sample_500000k.csv"
-        ),
+        help=("Path to raw review CSVdata/raw/appliances_reviews_sample_500000k.csv"),
     )
 
     parser.add_argument(
@@ -73,32 +71,30 @@ def parser_args() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-    "--english_only",
-    action="store_true",
-    help="Keep only English reviews.",
+        "--english_only",
+        action="store_true",
+        help="Keep only English reviews.",
     )
 
     parser.add_argument(
-    "--lang_conf_threshold",
-    type=float,
-    default=0.90,
-    help="Minimum confidence for English language filtering.",
+        "--lang_conf_threshold",
+        type=float,
+        default=0.90,
+        help="Minimum confidence for English language filtering.",
     )
 
     parser.add_argument(
-    "--n_splits",
-    type=int,
-    default=5,
-    help="Number of folds for Stratified K-Fold on the non-test split.",
+        "--n_splits",
+        type=int,
+        default=5,
+        help="Number of folds for Stratified K-Fold on the non-test split.",
     )
 
     parser.add_argument(
-    "--save_kfold",
-    action="store_true",
-    help="Save Stratified K-Fold train/val splits.",
+        "--save_kfold",
+        action="store_true",
+        help="Save Stratified K-Fold train/val splits.",
     )
-    
-
 
     parser.add_argument(
         "--test_size",
@@ -124,7 +120,6 @@ def parser_args() -> argparse.ArgumentParser:
         help="Random seed used for splitting.",
     )
 
-
     parser.add_argument(
         "--min_review_len",
         type=int,
@@ -132,18 +127,15 @@ def parser_args() -> argparse.ArgumentParser:
         help="Minimum number of tokens required in the cleaned text.",
     )
 
-
-
     return parser.parse_args()
+
 
 def validate_review_columns(df: pd.DataFrame) -> None:
     missing = REQUIRED_REVIEW_COLUMNS - set(df.columns)
     if missing:
-        raise ValueError(
-            "Input review CSV is missing required columns: "
-            f"{sorted(missing)}"
-        )
-    
+        raise ValueError(f"Input review CSV is missing required columns: {sorted(missing)}")
+
+
 def clean_text(value: Any) -> str:
     if pd.isna(value):
         return ""
@@ -168,22 +160,26 @@ def clean_text(value: Any) -> str:
 
     return text.strip()
 
+
 ### LANGUAGE DETECTION UTILITIES
 def init_language_identifier():
     from py3langid.langid import MODEL_FILE, LanguageIdentifier
+
     identifier = LanguageIdentifier.from_pickled_model(
         MODEL_FILE,
         norm_probs=True,
     )
-    
+
     identifier.set_languages(["en", "es", "fr", "de", "it", "pt"])
     return identifier
+
 
 def detect_language_with_conf(text: str, identifier) -> tuple[str, float]:
     text = str(text).strip()
     if not text:
         return "unknown", 0.0
     return identifier.classify(text)
+
 
 ### =======================================
 def parse_verified_purchase(value: Any) -> int:
@@ -194,6 +190,7 @@ def parse_verified_purchase(value: Any) -> int:
     normalized = str(value).strip().lower()
     return int(normalized in {"1", "true", "yes", "y"})
 
+
 def build_model_text(review_title: Any, review_text: Any) -> str:
     title = clean_text(review_title)
     body = clean_text(review_text)
@@ -202,10 +199,12 @@ def build_model_text(review_title: Any, review_text: Any) -> str:
     merged = re.sub(r"\s+", " ", merged)
     return merged.strip()
 
+
 def token_count(text: str) -> int:
     if not text:
         return 0
     return len(text.split())
+
 
 def map_sentiment(rating: Any) -> str:
     rating_value = float(rating)
@@ -227,14 +226,15 @@ def build_review_id(row: pd.Series) -> str:
     )
     return hashlib.md5(base.encode("utf-8")).hexdigest()
 
-def join_metadata(clean_df: pd.DataFrame, meta_path: Path)  -> pd.DataFrame:
+
+def join_metadata(clean_df: pd.DataFrame, meta_path: Path) -> pd.DataFrame:
     if not meta_path.exists():
         return clean_df
-    
+
     meta_df = pd.read_csv(meta_path)
     if meta_df.empty or "product_id" not in meta_df.columns:
         return clean_df
-    
+
     meta_columns = [
         col
         for col in [
@@ -256,6 +256,7 @@ def join_metadata(clean_df: pd.DataFrame, meta_path: Path)  -> pd.DataFrame:
 
 ### DATA SPLITTING UTILITIES
 
+
 def split_train_val(
     train_val_df: pd.DataFrame,
     test_size: float,
@@ -264,9 +265,7 @@ def split_train_val(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     val_fraction_of_train_val = val_size / (1.0 - test_size)
     if not 0.0 < val_fraction_of_train_val < 1.0:
-        raise ValueError(
-            "Invalid split config. Make sure 0 < val_size < 1 - test_size."
-        )
+        raise ValueError("Invalid split config. Make sure 0 < val_size < 1 - test_size.")
 
     train_df, val_df = train_test_split(
         train_val_df,
@@ -292,6 +291,7 @@ def split_dataset_with_holdout(
         train_val_df.reset_index(drop=True),
         test_df.reset_index(drop=True),
     )
+
 
 def save_kfold_splits(
     train_val_df: pd.DataFrame,
@@ -321,20 +321,20 @@ def save_kfold_splits(
         fold_train_df.to_csv(fold_dir / "train.csv", index=False)
         fold_val_df.to_csv(fold_dir / "val.csv", index=False)
 
+
 def split_dataset(
     clean_df: pd.DataFrame,
     test_size: float,
     val_size: float,
     random_state: int,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    
+
     train_val_df, test_df = train_test_split(
         clean_df,
         test_size=test_size,
         stratify=clean_df["sentiment_label"],
         random_state=random_state,
     )
-
 
     val_fraction_of_train_val = val_size / (1.0 - test_size)
     train_df, val_df = train_test_split(
@@ -344,12 +344,12 @@ def split_dataset(
         random_state=random_state,
     )
 
-
     return (
         train_df.reset_index(drop=True),
         val_df.reset_index(drop=True),
         test_df.reset_index(drop=True),
     )
+
 
 def main() -> None:
     args = parser_args()
@@ -357,7 +357,6 @@ def main() -> None:
     input_meta_path = args.input_meta
     interim_dir = args.interim_dir
     processed_dir = args.processed_dir
-
 
     processed_dir.mkdir(parents=True, exist_ok=True)
     interim_dir.mkdir(parents=True, exist_ok=True)
@@ -392,7 +391,6 @@ def main() -> None:
 
     df = df[df["text_len"] >= args.min_review_len]
 
-
     if args.english_only:
         identifier = init_language_identifier()
         lang_preds = df["text"].map(lambda x: detect_language_with_conf(x, identifier))
@@ -401,13 +399,13 @@ def main() -> None:
 
         before_lang = len(df)
         df = df[
-            (df["detected_lang"] == "en")
-            & (df["lang_conf"] >= args.lang_conf_threshold)
+            (df["detected_lang"] == "en") & (df["lang_conf"] >= args.lang_conf_threshold)
         ].copy()
         print(f"Kept English reviews: {len(df):,}/{before_lang:,}")
 
-    df = df.drop_duplicates(subset=["product_id", "rating", "review_text", "timestamp"]).reset_index(drop=True)
-
+    df = df.drop_duplicates(
+        subset=["product_id", "rating", "review_text", "timestamp"]
+    ).reset_index(drop=True)
 
     df["sentiment_label"] = df["rating"].map(map_sentiment)
 
@@ -427,21 +425,21 @@ def main() -> None:
         "text_len",
     ]
 
-    clean_df = df[
-        base_cols
-    ].copy()
+    clean_df = df[base_cols].copy()
 
     clean_df = join_metadata(clean_df, input_meta_path)
 
-    clean_df = clean_df.sort_values(by=["product_id", "timestamp", "review_id"]).reset_index(drop=True)
+    clean_df = clean_df.sort_values(by=["product_id", "timestamp", "review_id"]).reset_index(
+        drop=True
+    )
 
     optional_cols = [col for col in ["detected_lang", "lang_conf"] if col in df.columns]
 
     clean_df = df[base_cols + optional_cols].copy()
     clean_df = join_metadata(clean_df, input_meta_path)
-    clean_df = clean_df.sort_values(
-        by=["product_id", "timestamp", "review_id"]
-    ).reset_index(drop=True)
+    clean_df = clean_df.sort_values(by=["product_id", "timestamp", "review_id"]).reset_index(
+        drop=True
+    )
 
     train_val_df, test_df = split_dataset_with_holdout(
         clean_df=clean_df,
@@ -470,7 +468,6 @@ def main() -> None:
     val_df.to_csv(val_path, index=False)
     test_df.to_csv(test_path, index=False)
 
-
     if args.save_kfold:
         save_kfold_splits(
             train_val_df=train_val_df,
@@ -478,8 +475,6 @@ def main() -> None:
             n_splits=args.n_splits,
             random_state=args.random_state,
         )
-
-
 
     print("Preprocess completed.")
     print(f"Original rows: {original_rows:,}")
@@ -496,18 +491,6 @@ def main() -> None:
     if args.save_kfold:
         print(f"- {processed_dir / 'folds'}")
 
-if __name__ == "__main__": 
+
+if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
-
-
-

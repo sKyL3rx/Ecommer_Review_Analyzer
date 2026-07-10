@@ -12,7 +12,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-load_dotenv() 
+load_dotenv()
 
 
 INPUT_PATH = Path("data/processed/phase2/product_sentiment_groups_ranked.jsonl")
@@ -197,7 +197,6 @@ def generate_with_openai(prompt: str, model: str) -> str:
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is not set.")
 
-
     client = OpenAI(api_key=api_key)
     response = client.responses.create(
         model=model,
@@ -236,7 +235,9 @@ def sha1_prompt(prompt: str) -> str:
     return hashlib.sha1(prompt.encode("utf-8")).hexdigest()
 
 
-def build_tasks(rows: list[dict[str, Any]], args: argparse.Namespace, completed_keys: set[str]) -> tuple[list[dict[str, Any]], int, int]:
+def build_tasks(
+    rows: list[dict[str, Any]], args: argparse.Namespace, completed_keys: set[str]
+) -> tuple[list[dict[str, Any]], int, int]:
     sentiments = [
         ("positive", "positive_review_items", "positive_reviews"),
         ("neutral", "neutral_review_items", "neutral_reviews"),
@@ -302,7 +303,9 @@ def build_tasks(rows: list[dict[str, Any]], args: argparse.Namespace, completed_
     return tasks, skipped_products, skipped_existing
 
 
-def process_task(task: dict[str, Any], provider: str, model: str, sleep_seconds: float) -> dict[str, Any]:
+def process_task(
+    task: dict[str, Any], provider: str, model: str, sleep_seconds: float
+) -> dict[str, Any]:
     if sleep_seconds > 0:
         time.sleep(sleep_seconds)
 
@@ -356,7 +359,10 @@ def main() -> None:
     written = 0
     error_count = 0
 
-    with output_path.open("a", encoding="utf-8") as out_f, errors_path.open("a", encoding="utf-8") as err_f:
+    with (
+        output_path.open("a", encoding="utf-8") as out_f,
+        errors_path.open("a", encoding="utf-8") as err_f,
+    ):
         with ThreadPoolExecutor(max_workers=args.max_workers) as executor:
             future_to_task = {
                 executor.submit(

@@ -220,7 +220,8 @@ def main() -> None:
         result["llm_judge"] = {
             "avg_faithfulness": sum(x["faithfulness"] for x in judge_rows) / len(judge_rows),
             "avg_coverage": sum(x["coverage"] for x in judge_rows) / len(judge_rows),
-            "avg_sentiment_alignment": sum(x["sentiment_alignment"] for x in judge_rows) / len(judge_rows),
+            "avg_sentiment_alignment": sum(x["sentiment_alignment"] for x in judge_rows)
+            / len(judge_rows),
             "avg_clarity": sum(x["clarity"] for x in judge_rows) / len(judge_rows),
             "avg_overall": sum(x["overall"] for x in judge_rows) / len(judge_rows),
         }

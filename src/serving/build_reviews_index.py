@@ -8,6 +8,7 @@ import pandas as pd
 REVIEWS_PATH = Path("data/raw/appliances_demo_reviews_full.csv")
 OUTPUT_PATH = Path("data/serving/appliances_demo_reviews.parquet")
 
+
 def clean_text(value: Any) -> str | None:
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return None
@@ -23,21 +24,24 @@ def main() -> None:
 
     df = pd.read_csv(REVIEWS_PATH)
 
-
-    required_cols = ["product_id","rating", "review_text"]
+    required_cols = ["product_id", "rating", "review_text"]
     missing = [c for c in required_cols if c not in df.columns]
 
     if missing:
         raise ValueError(f"Missing required columns: {missing}")
-    
-    df["review_title"] = df["review_title"].apply(clean_text) if "review_title" in df.columns else None
+
+    df["review_title"] = (
+        df["review_title"].apply(clean_text) if "review_title" in df.columns else None
+    )
     df["review_text"] = df["review_text"].apply(clean_text)
 
     df = df.dropna(subset=["product_id", "review_text"]).copy()
     df = df[df["product_id"] != ""].copy()
 
     if "helpful_vote" in df.columns:
-        df["helpful_vote"] = pd.to_numeric(df["helpful_vote"], errors="coerce").fillna(0).astype(int)
+        df["helpful_vote"] = (
+            pd.to_numeric(df["helpful_vote"], errors="coerce").fillna(0).astype(int)
+        )
     else:
         df["helpful_vote"] = 0
 
@@ -63,6 +67,8 @@ def main() -> None:
     df = df.reset_index(drop=True)
     df["review_id"] = "rvw_" + (df.index + 1).astype(str)
 
+    df["rating"] = pd.to_numeric(df["rating"], errors="coerce")
+
     dedupe_cols = ["product_id", "review_text"]
 
     if "timestamp" in df.columns:
@@ -77,6 +83,7 @@ def main() -> None:
         "review_text",
         "review_char_len",
         "timestamp",
+        "rating",
         "review_datetime",
         "helpful_vote",
         "verified_purchase",
@@ -84,7 +91,6 @@ def main() -> None:
     ]
 
     final_df = df[final_cols].copy()
-
 
     final_df = final_df.sort_values(
         by=["product_id", "helpful_vote", "timestamp"],
@@ -99,7 +105,6 @@ def main() -> None:
     print(f"unique products: {final_df['product_id'].nunique():,}")
     print(f"saved to: {OUTPUT_PATH}")
 
+
 if __name__ == "__main__":
     main()
-
-

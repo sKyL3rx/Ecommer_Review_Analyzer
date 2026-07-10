@@ -6,12 +6,13 @@ from pathlib import Path
 from typing import Any
 
 import joblib
-import mlflow
 import mlflow.sklearn
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, classification_report, precision_recall_fscore_support
+
+import mlflow
 
 DEFAULT_TRAIN_PATH = Path("data/processed/train.csv")
 DEFAULT_VAL_PATH = Path("data/processed/val.csv")
@@ -49,16 +50,17 @@ def parse_args() -> argparse.Namespace:
     )
     return parser.parse_args()
 
+
 def validate_columns(df: pd.DataFrame, text_column: str, target_column: str) -> None:
     missing = {text_column, target_column} - set(df.columns)
     if missing:
         raise ValueError(f"Missing required columns: {sorted(missing)}")
-    
+
 
 def load_dataset(path: Path, text_column: str, target_column: str) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(f"Dataset not found: {path}")
-    
+
     df = pd.read_csv(path)
     validate_columns(df, text_column, target_column)
 
@@ -73,6 +75,7 @@ def load_dataset(path: Path, text_column: str, target_column: str) -> pd.DataFra
 
     return df
 
+
 def build_vectorizer(args: argparse.Namespace) -> TfidfVectorizer:
     return TfidfVectorizer(
         max_features=args.max_features,
@@ -80,6 +83,7 @@ def build_vectorizer(args: argparse.Namespace) -> TfidfVectorizer:
         min_df=args.min_df,
         lowercase=False,
     )
+
 
 def build_model(args: argparse.Namespace) -> LogisticRegression:
     class_weight: str | dict[str, float] | None = args.class_weight
@@ -92,6 +96,7 @@ def build_model(args: argparse.Namespace) -> LogisticRegression:
         random_state=args.random_state,
         n_jobs=-1,
     )
+
 
 def compute_metrics(y_true: pd.Series, y_pred: Any) -> dict[str, float]:
     precision_macro, recall_macro, f1_macro, _ = precision_recall_fscore_support(
@@ -107,6 +112,7 @@ def compute_metrics(y_true: pd.Series, y_pred: Any) -> dict[str, float]:
         "recall_macro": float(recall_macro),
         "f1_macro": float(f1_macro),
     }
+
 
 def save_outputs(
     *,
@@ -154,7 +160,6 @@ def save_outputs(
     }
 
 
-
 def configure_mlflow(args: argparse.Namespace) -> bool:
     if args.disable_mlflow or mlflow is None:
         return False
@@ -180,7 +185,6 @@ def main() -> None:
 
     model = build_model(args)
 
-
     use_mlflow = configure_mlflow(args)
     run_context = mlflow.start_run(run_name=args.run_name) if use_mlflow else None
 
@@ -205,7 +209,7 @@ def main() -> None:
                     "val_rows": len(val_df),
                 }
             )
-        
+
         model.fit(X_train_vec, y_train)
         val_pred = model.predict(X_val_vec)
 
@@ -246,20 +250,11 @@ def main() -> None:
         print("Saved artifacts:")
         for key, path in output_paths.items():
             print(f"- {key}: {path}")
-    
+
     finally:
         if run_context is not None:
             mlflow.end_run()
 
+
 if __name__ == "__main__":
     main()
-
-
-    
-
-
-
-
-
-
-

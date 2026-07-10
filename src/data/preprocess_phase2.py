@@ -10,9 +10,7 @@ import pandas as pd
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Preprocess the data for phase 2"
-    )
+    parser = argparse.ArgumentParser(description="Preprocess the data for phase 2")
     parser.add_argument(
         "--input_path",
         type=Path,
@@ -113,9 +111,9 @@ def parse_args() -> argparse.Namespace:
         help="Very long reviews are increasingly penalized beyond this range.",
     )
 
-
     args = parser.parse_args()
     return args
+
 
 def validate_input_columns(df: pd.DataFrame) -> None:
     required = {
@@ -131,9 +129,8 @@ def validate_input_columns(df: pd.DataFrame) -> None:
     }
     missing = required - set(df.columns)
     if missing:
-        raise ValueError(
-            f"Input file is missing required columns: {sorted(missing)}"
-        )
+        raise ValueError(f"Input file is missing required columns: {sorted(missing)}")
+
 
 def min_max_normalize(series: pd.Series) -> pd.Series:
     s = series.astype(float)
@@ -152,22 +149,20 @@ def compute_length_score(
 ) -> float:
     if token_len <= 0:
         return 0.0
-    
+
     if token_len < ideal_min:
         return max(0.0, token_len / ideal_min)
 
     if ideal_min <= token_len <= ideal_max:
         return 1.0
-    
+
     if token_len >= hard_max:
         return 0.2
-    
+
     # Last case where token_len is between ideal_max and hard_max, I apply a linear decay
     decay = 1.0 - ((token_len - ideal_max) / float(hard_max - ideal_max))
     return max(0.2, decay)
 
-
-    
 
 def add_quality_score(
     df: pd.DataFrame,
@@ -186,7 +181,7 @@ def add_quality_score(
     )
     df["text_len"] = pd.to_numeric(df["text_len"], errors="coerce").fillna(0).astype(int)
 
-    # Log-scale helpful votes because the distribution is usually very skewed
+    # Log-scale helpful votes to avoid skewness
     df["helpful_vote_log"] = np.log1p(df["helpful_vote"].clip(lower=0))
     df["helpful_vote_norm"] = min_max_normalize(df["helpful_vote_log"])
 
@@ -209,11 +204,11 @@ def add_quality_score(
 
     return df
 
+
 def load_embedder(model_name: str):
     from sentence_transformers import SentenceTransformer
 
     return SentenceTransformer(model_name)
-
 
 
 def diverse_selection(
@@ -270,7 +265,7 @@ def diverse_selection(
         else:
             skipped_indices.append(idx)
 
-    # If threshold sim is too strict, I use a fallback with skipped_indices to ensure I have at least min_reviews
+    # If threshold sim is too strict,a fallback with skipped_indices to ensure having at least min_reviews
     if len(selected_indices) < min_reviews:
         for idx in skipped_indices:
             if idx not in selected_indices:
@@ -293,6 +288,7 @@ def diverse_selection(
         ascending=[False, False, False, False],
     ).reset_index(drop=True)
     return selected
+
 
 def first_non_null(series: pd.Series) -> Any:
     non_null = series.dropna()
@@ -336,7 +332,6 @@ def review_objects_from_df(selected_df: pd.DataFrame) -> list[dict[str, Any]]:
         records.append(item)
     return records
 
-    
 
 def create_group_records(
     clean_df: pd.DataFrame,
@@ -346,8 +341,8 @@ def create_group_records(
     use_embeddings: bool,
     similarity_threshold: float,
     embedder=None,
-    ) -> list[dict[str, Any]]:
-    
+) -> list[dict[str, Any]]:
+
     records: list[dict[str, Any]] = []
 
     grouped = clean_df.groupby(["product_id", "sentiment_label"], dropna=False)
@@ -357,7 +352,7 @@ def create_group_records(
         group_size = len(group)
         if group_size < min_group_size:
             continue
-        
+
         selected_df = diverse_selection(
             group_df=group,
             max_reviews=max_reviews_per_group,
@@ -374,20 +369,23 @@ def create_group_records(
             {
                 "product_id": product_key,
                 "product_title": first_non_null(group["product_title"])
-                if "product_title" in group.columns else None,
+                if "product_title" in group.columns
+                else None,
                 "average_rating": float(first_non_null(group["average_rating"]))
-                if "average_rating" in group.columns and first_non_null(group["average_rating"]) is not None
+                if "average_rating" in group.columns
+                and first_non_null(group["average_rating"]) is not None
                 else None,
                 "rating_number": int(first_non_null(group["rating_number"]))
-                if "rating_number" in group.columns and first_non_null(group["rating_number"]) is not None
+                if "rating_number" in group.columns
+                and first_non_null(group["rating_number"]) is not None
                 else None,
                 "price": float(first_non_null(group["price"]))
                 if "price" in group.columns and first_non_null(group["price"]) is not None
                 else None,
-                "store": first_non_null(group["store"])
-                if "store" in group.columns else None,
+                "store": first_non_null(group["store"]) if "store" in group.columns else None,
                 "main_category": first_non_null(group["main_category"])
-                if "main_category" in group.columns else None,
+                if "main_category" in group.columns
+                else None,
                 "review_count": 0,
                 "avg_rating_from_reviews": 0.0,
                 "positive_count": 0,
@@ -409,7 +407,6 @@ def create_group_records(
         product_entry[f"{sentiment_label}_count"] = group_size
         product_entry[f"{sentiment_label}_selected_count"] = len(selected_df)
 
-
         selected_texts = selected_df["text"].fillna("").astype(str).tolist()
         product_entry[f"{sentiment_label}_reviews"] = selected_texts
         product_entry[f"{sentiment_label}_review_items"] = review_objects_from_df(selected_df)
@@ -424,16 +421,16 @@ def create_group_records(
                     entry[f"{sentiment}_count"] / entry["review_count"], 4
                 )
         records.append(entry)
-        
+
     records.sort(key=lambda x: x["review_count"], reverse=True)
     return records
-        
+
 
 def main() -> None:
     args = parse_args()
     if not args.input_path.exists():
         raise FileNotFoundError(f"Input file not found: {args.input_path}")
-   
+
     args.output_jsonl.parent.mkdir(parents=True, exist_ok=True)
     args.output_csv.parent.mkdir(parents=True, exist_ok=True)
 
@@ -460,7 +457,6 @@ def main() -> None:
     if args.use_embeddings:
         print(f"Loading embedding model: {args.embedding_model}")
         embedder = load_embedder(args.embedding_model)
-
 
     group_records = create_group_records(
         clean_df=df,

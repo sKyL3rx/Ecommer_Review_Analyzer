@@ -6,7 +6,6 @@ from pathlib import Path
 
 import joblib
 import matplotlib.pyplot as plt
-import mlflow
 import pandas as pd
 from sklearn.metrics import (
     ConfusionMatrixDisplay,
@@ -15,6 +14,8 @@ from sklearn.metrics import (
     confusion_matrix,
     precision_recall_fscore_support,
 )
+
+import mlflow
 
 DEFAULT_TEST_PATH = Path("data/processed/test.csv")
 DEFAULT_MODEL_PATH = Path("artifacts/models/sentiment_model.joblib")
@@ -47,10 +48,12 @@ def parse_args() -> argparse.Namespace:
     )
     return parser.parse_args()
 
+
 def validate_columns(df: pd.DataFrame, text_column: str, target_column: str) -> None:
     missing = {text_column, target_column} - set(df.columns)
     if missing:
         raise ValueError(f"Missing required columns: {sorted(missing)}")
+
 
 def load_test_dataset(path: Path, text_column: str, target_column: str) -> pd.DataFrame:
     if not path.exists():
@@ -70,10 +73,12 @@ def load_test_dataset(path: Path, text_column: str, target_column: str) -> pd.Da
 
     return df
 
+
 def load_artifact(path: Path, artifact_name: str):
     if not path.exists():
         raise FileNotFoundError(f"{artifact_name} not found: {path}")
     return joblib.load(path)
+
 
 def compute_metrics(y_true: pd.Series, y_pred: pd.Series) -> dict[str, float]:
     precision_macro, recall_macro, f1_macro, _ = precision_recall_fscore_support(
@@ -99,6 +104,7 @@ def compute_metrics(y_true: pd.Series, y_pred: pd.Series) -> dict[str, float]:
         "f1_weighted": float(f1_weighted),
     }
 
+
 def save_confusion_matrix(y_true: pd.Series, y_pred: pd.Series, output_path: Path) -> None:
     cm = confusion_matrix(y_true, y_pred, labels=VALID_LABELS)
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=VALID_LABELS)
@@ -108,7 +114,6 @@ def save_confusion_matrix(y_true: pd.Series, y_pred: pd.Series, output_path: Pat
     fig.tight_layout()
     fig.savefig(output_path, dpi=180, bbox_inches="tight")
     plt.close(fig)
-
 
 
 def save_outputs(
@@ -169,9 +174,9 @@ def configure_mlflow(args: argparse.Namespace) -> bool:
     mlflow.set_experiment(args.experiment_name)
     return True
 
+
 def main() -> None:
     args = parse_args()
-
 
     test_df = load_test_dataset(args.test_path, args.text_column, args.target_column)
     vectorizer = load_artifact(args.vectorizer_path, "Vectorizer")
@@ -242,6 +247,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
-

@@ -13,7 +13,9 @@ from src.app.clients.summarizer_client import VLLMSummaryGenerator
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate predictions for test.jsonl and measure latency.")
+    parser = argparse.ArgumentParser(
+        description="Generate predictions for test.jsonl and measure latency."
+    )
     parser.add_argument(
         "--input_path",
         type=Path,
@@ -74,6 +76,7 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
                 rows.append(json.loads(line))
     return rows
 
+
 def extract_prompt_and_reference(messages: list[dict[str, str]]) -> tuple[str, str]:
     user_msgs = [m["content"] for m in messages if m.get("role") == "user"]
     assistant_msgs = [m["content"] for m in messages if m.get("role") == "assistant"]
@@ -84,6 +87,7 @@ def extract_prompt_and_reference(messages: list[dict[str, str]]) -> tuple[str, s
         raise ValueError("No assistant message found in messages.")
 
     return user_msgs[-1].strip(), assistant_msgs[-1].strip()
+
 
 def compute_latency_stats(latencies_ms: list[float]) -> dict[str, float]:
     arr = np.array(latencies_ms, dtype=float)
@@ -100,8 +104,6 @@ def compute_latency_stats(latencies_ms: list[float]) -> dict[str, float]:
     }
 
 
-
-
 def main() -> None:
     args = parse_args()
 
@@ -115,47 +117,44 @@ def main() -> None:
     rows_for_df = []
     latencies_ms: list[float] = []
 
-    summary_client = VLLMSummaryGenerator(base_url = args.base_url,
-                                          max_tokens = args.max_tokens,
-                                          temperature = args.temperature
-                                          )
+    summary_client = VLLMSummaryGenerator(
+        base_url=args.base_url, max_tokens=args.max_tokens, temperature=args.temperature
+    )
     for idx, row in enumerate(rows):
         messages = row.get("messages")
         if not isinstance(messages, list):
             raise ValueError(f"Row {idx} missing valid 'messages' field.")
-        
 
         prompt, reference_answer = extract_prompt_and_reference(messages)
 
         start = time.perf_counter()
 
-        generated_answer = summary_client(prompt = prompt, context = "no")
+        generated_answer = summary_client(prompt=prompt, context="no")
 
         latency_ms = (time.perf_counter() - start) * 1000.0
 
         rows_for_df.append(
-        {
-            "prompt": prompt,
-            "reference_answer": reference_answer,
-            "generated_answer": generated_answer,
-            "latency_ms": round(latency_ms, 2),
-            "messages": messages,
-        }
+            {
+                "prompt": prompt,
+                "reference_answer": reference_answer,
+                "generated_answer": generated_answer,
+                "latency_ms": round(latency_ms, 2),
+                "messages": messages,
+            }
         )
         latencies_ms.append(latency_ms)
 
         if (idx + 1) % 10 == 0:
             print(f"Processed {idx + 1}/{len(rows)} examples...")
-    
+
     df = pd.DataFrame(rows_for_df)
 
     df.to_csv(args.output_df, index=False)
 
-
     metrics = compute_latency_stats(latencies_ms)
     with args.output_metrics.open("w", encoding="utf-8") as f:
         json.dump(metrics, f, ensure_ascii=False, indent=2)
-    
+
     print("Done.")
     print(f"Saved testset predictions to: {args.output_df}")
     print(f"Saved latency metrics to: {args.output_metrics}")
@@ -164,6 +163,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-        
-

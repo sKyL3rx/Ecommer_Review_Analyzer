@@ -178,15 +178,17 @@ def main() -> None:
     trainer.log_metrics("eval", eval_metrics)
     trainer.save_metrics("eval", eval_metrics)
 
-    print(json.dumps(
-        {
-            "status": "ok",
-            "output_dir": cfg["output_dir"],
-            "train_samples": len(dataset["train"]),
-            "eval_samples": len(dataset["validation"]),
-        },
-        indent=2,
-    ))
+    print(
+        json.dumps(
+            {
+                "status": "ok",
+                "output_dir": cfg["output_dir"],
+                "train_samples": len(dataset["train"]),
+                "eval_samples": len(dataset["validation"]),
+            },
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":
