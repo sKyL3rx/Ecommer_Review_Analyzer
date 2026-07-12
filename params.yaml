@@ -1,39 +1,201 @@
+project:
+  name: ecommerce-review-analyzer
+  seed: 42
+
 data:
-  raw_reviews_path: data/raw/appliances_reviews_sample_200k.csv
-  train_path: data/processed/train.csv
-  val_path: data/processed/val.csv
-  test_path: data/processed/test.csv
+  dataset_name: McAuley-Lab/Amazon-Reviews-2023
+  category: Appliances
+  sample_n: 500000
+
+  raw_dir: data/raw
+  raw_reviews_path: data/raw/appliances_reviews_sample_500000.csv
+  raw_meta_path: data/raw/appliances_meta_matched.csv
+
+  raw_serving_reviews_path: data/serving/appliances_reviews_full.csv
+  raw_serving_meta_path: data/serving/appliances_meta_full.csv
+
+  interim_dir: data/interim
+  reviews_clean_path: data/interim/reviews_clean.csv
+
+  processed_phase1_dir: data/processed/phase1
+  train_val_path: data/processed/phase1/train_val.csv
+  train_path: data/processed/phase1/train.csv
+  val_path: data/processed/phase1/val.csv
+  test_path: data/processed/phase1/test.csv
+
+  processed_phase2_dir: data/processed/phase2
+  phase2_groups_jsonl: data/processed/phase2/product_sentiment_groups_ranked.jsonl
+  phase2_group_stats_csv: data/processed/phase2/product_sentiment_group_stats_ranked.csv
+  phase2_sft_summary_dataset: data/processed/phase2/phase2_sft_summary_dataset.jsonl
+  phase2_sft_summary_errors: data/processed/phase2/phase2_sft_summary_errors.jsonl
+
+  trl_data_dir: data/processed/phase2/trl_data
+  trl_train_path: data/processed/phase2/trl_data/train.jsonl
+  trl_val_path: data/processed/phase2/trl_data/val.jsonl
+  trl_test_path: data/processed/phase2/trl_data/test.jsonl
+
+serving:
+  catalog_path: data/serving/appliances_demo_catalog.parquet
+  reviews_path: data/serving/appliances_demo_reviews.parquet
+
+preprocess_phase1:
+  english_only_flag: "--english_only"
+  lang_conf_threshold: 0.90
+  n_splits: 5
+  save_kfold_flag: "--save_kfold"
   test_size: 0.15
   val_size: 0.15
   random_state: 42
   min_review_len: 3
 
+sentiment_training:
+  train_path: data/processed/phase1/train.csv
+  val_path: data/processed/phase1/val.csv
+
+  text_column: text
+  target_column: sentiment_label
+
+  max_features: 30000
+  ngram_min: 1
+  ngram_max: 2
+  min_df: 2
+  max_iter: 1000
+  class_weight: balanced
+  random_state: 42
+
+  model_dir: artifacts/models
+  report_dir: artifacts/reports
+  vectorizer_path: artifacts/models/tfidf.joblib
+  model_path: artifacts/models/sentiment_model.joblib
+  val_metrics_path: artifacts/reports/val_metrics.json
+  val_classification_report_path: artifacts/reports/val_classification_report.txt
+  training_summary_path: artifacts/reports/training_summary.json
+
+  experiment_name: amazon_appliances_sentiment
+  run_name: tfidf_logreg_baseline
+  disable_mlflow: true
+  disable_mlflow_flag: "--disable_mlflow"
+
+sentiment_eval:
+  test_path: data/processed/phase1/test.csv
+  model_path: artifacts/models/sentiment_model.joblib
+  vectorizer_path: artifacts/models/tfidf.joblib
+
+  text_column: text
+  target_column: sentiment_label
+
+  report_dir: artifacts/reports
+  metrics_path: artifacts/reports/metrics.json
+  classification_report_path: artifacts/reports/classification_report.txt
+  confusion_matrix_path: artifacts/reports/confusion_matrix.png
+  predictions_path: artifacts/reports/test_predictions.csv
+  evaluation_summary_path: artifacts/reports/evaluation_summary.json
+
+  experiment_name: amazon_appliances_sentiment
+  run_name: tfidf_logreg_test_eval
+  disable_mlflow: true
+  disable_mlflow_flag: "--disable_mlflow"
+
+  
+preprocess_phase2:
+  input_path: data/interim/reviews_clean.csv
+  output_jsonl: data/processed/phase2/product_sentiment_groups_ranked.jsonl
+  output_csv: data/processed/phase2/product_sentiment_group_stats_ranked.csv
+
+  min_reviews_per_group: 3
+  max_reviews_per_group: 6
+  min_group_size: 3
+
+  similarity_threshold: 0.82
+  weight_helpful: 0.40
+  weight_verified: 0.30
+  weight_length: 0.30
+
+  ideal_min_len: 20
+  ideal_max_len: 100
+  hard_max_len: 250
+
+  use_embeddings: true
+  use_embeddings_flag: "--use_embeddings"
+  embedding_model: sentence-transformers/all-MiniLM-L6-v2
+
+synthetic_summary:
+  input_path: data/processed/phase2/product_sentiment_groups_ranked.jsonl
+  output_path: data/processed/phase2/phase2_sft_summary_dataset.jsonl
+  errors_path: data/processed/phase2/phase2_sft_summary_errors.jsonl
+
+  provider: gemini
+  model: gemini-2.5-flash-lite
+  top_k: 5
+  max_products_flag: ""
+  min_sentiments_present: 2
+  sleep_seconds: 0.3
+  resume: false
+  resume_flag: ""
+  max_workers: 4
+
+trl_split:
+  input_path: data/processed/phase2/phase2_sft_summary_dataset.jsonl
+  output_dir: data/processed/phase2/trl_data
+  train_path: data/processed/phase2/trl_data/train.jsonl
+  val_path: data/processed/phase2/trl_data/val.jsonl
+  test_path: data/processed/phase2/trl_data/test.jsonl
+  summary_path: data/processed/phase2/trl_data/split_summary.json
+
+  test_size: 0.20
+  val_fraction_of_temp: 0.50
+  random_state: 42
+
 sft:
+  launcher: accelerate launch
+
   train_path: data/processed/phase2/trl_data/train.jsonl
   val_path: data/processed/phase2/trl_data/val.jsonl
   test_path: data/processed/phase2/trl_data/test.jsonl
 
   model_name: Qwen/Qwen2.5-3B-Instruct
+
   output_dir: artifacts/models/summary_sft
 
+  adapter_config_path: artifacts/models/summary_sft/adapter_config.json
+  adapter_model_path: artifacts/models/summary_sft/adapter_model.safetensors
+
+
+  train_results_path: artifacts/reports/summary_sft/train_results.json
+  eval_results_path: artifacts/reports/summary_sft/eval_results.json
+
   seed: 42
-  max_seq_length: 2048
+
+  max_train_samples: 1
+  max_eval_samples: 1
+  max_steps: 1
+
+  max_seq_length: 256
+  num_train_epochs: 1
 
   learning_rate: 1e-4
-  num_train_epochs: 8
 
-  per_device_train_batch_size: 2
-  per_device_eval_batch_size: 2
-  gradient_accumulation_steps: 16
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 1
 
   eos_token: "<|im_end|>"
 
-  logging_steps: 10
-  eval_steps: 100
-  save_steps: 100
-  save_total_limit: 2
+  logging_strategy: steps
+  logging_steps: 1
 
-  warmup_ratio: 0.03
+  eval_strategy: "no"
+  save_strategy: "no"
+  eval_steps: 1
+  save_steps: 1
+  save_total_limit: 1
+
+  run_final_eval: false
+
+
+  save_model_after_train: true
+
+  warmup_ratio: 0.0
   lr_scheduler_type: cosine
   weight_decay: 0.01
   max_grad_norm: 1.0
@@ -46,14 +208,20 @@ sft:
   assistant_only_loss: true
   packing: false
   eval_packing: false
-  dataset_num_proc: 2
-  dataloader_num_workers: 2
 
-  load_best_model_at_end: true
+  dataset_num_proc: 1
+  dataloader_num_workers: 0
+
+  report_to: none
+
+  load_best_model_at_end: false
   metric_for_best_model: eval_loss
   greater_is_better: false
-  early_stopping_patience: 3
+
+  early_stopping_patience: 0
   early_stopping_threshold: 0.0
+
+  trust_remote_code: false
 
   qlora:
     enabled: true
@@ -70,6 +238,35 @@ sft:
     task_type: CAUSAL_LM
     target_modules: all-linear
     use_rslora: true
+  
+summary_generation:
+  input_path: data/processed/phase2/trl_data/test.jsonl
+  output_df: artifacts/predictions/summary_predictions_testset.csv
+  output_metrics: artifacts/eval/summary_generation_latency.json
 
-  report_to: none
-  trust_remote_code: false
+  base_url: http://localhost:8384/v1
+  api_key: demo-key
+  model_name: summary-sft
+  max_tokens: 2048
+  temperature: 0.0
+
+summary_eval:
+  input_path: artifacts/predictions/summary_predictions_testset.csv
+  output_path: artifacts/eval/metrics_summary_model.json
+  per_sample_output_path: artifacts/eval/metrics_summary_model_per_sample.csv
+
+  run_judge: false
+  run_judge_flag: ""
+  judge_model: gpt-4.1-mini
+  max_workers: 8
+
+mlflow_summary:
+  lora_dir: artifacts/models/summary_sft
+  metrics_path: artifacts/reports/summary_sft/eval_results.json
+  registered_model_name: ecommerce-review-summary
+  experiment_name: ecommerce_review_summary
+  run_name: summary_lora
+  summary_model_version: summary-lora-local-v1
+  training_env: cloud
+  dataset_version: appliances-summary-local-v1
+  alias: local-lora

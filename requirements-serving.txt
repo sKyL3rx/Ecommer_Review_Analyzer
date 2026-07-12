@@ -16,3 +16,4 @@ psycopg[binary]
 alembic
 prometheus-client
 dvc[gs]
+vllm 

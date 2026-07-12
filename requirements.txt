@@ -33,3 +33,4 @@ python-dotenv
 pydantic-settings==2.6.1
 redis==7.4.0
 rq==2.8.0
+pyarrow

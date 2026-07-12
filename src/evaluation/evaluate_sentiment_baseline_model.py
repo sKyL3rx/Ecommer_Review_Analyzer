@@ -124,6 +124,7 @@ def save_outputs(
     y_pred: pd.Series,
     y_proba,
     report_dir: Path,
+    target_column: str,
 ) -> dict[str, Path]:
     report_dir.mkdir(parents=True, exist_ok=True)
 
@@ -137,7 +138,7 @@ def save_outputs(
         json.dump(metrics, f, indent=2)
 
     report_path.write_text(report_text, encoding="utf-8")
-    save_confusion_matrix(test_df["sentiment_label"], y_pred, confusion_matrix_path)
+    save_confusion_matrix(test_df[target_column], y_pred, confusion_matrix_path)
 
     prediction_df = test_df.copy()
     prediction_df["predicted_sentiment"] = y_pred
@@ -152,7 +153,7 @@ def save_outputs(
 
     summary = {
         "test_rows": int(len(test_df)),
-        "test_label_distribution": test_df["sentiment_label"].value_counts().to_dict(),
+        "test_label_distribution": test_df[target_column].value_counts().to_dict(),
         "predicted_label_distribution": pd.Series(y_pred).value_counts().to_dict(),
     }
     with summary_path.open("w", encoding="utf-8") as f:
@@ -181,6 +182,7 @@ def main() -> None:
     test_df = load_test_dataset(args.test_path, args.text_column, args.target_column)
     vectorizer = load_artifact(args.vectorizer_path, "Vectorizer")
     model = load_artifact(args.model_path, "Model")
+    target_column = args.target_column
 
     X_test = test_df[args.text_column]
     y_test = test_df[args.target_column]
@@ -221,6 +223,7 @@ def main() -> None:
             y_pred=pd.Series(y_pred),
             y_proba=y_proba,
             report_dir=args.report_dir,
+            target_column = target_column,
         )
 
         if use_mlflow:

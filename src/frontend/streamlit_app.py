@@ -65,9 +65,15 @@ def render_sentiment_distribution(dist: dict[str, Any]) -> None:
     c3.metric("Negative", counts.get("negative", 0))
 
     st.write("**Sentiment ratios**")
-    st.progress(float(ratios.get("positive", 0.0)), text=f"Positive: {ratios.get('positive', 0.0):.2%}")
-    st.progress(float(ratios.get("neutral", 0.0)), text=f"Neutral: {ratios.get('neutral', 0.0):.2%}")
-    st.progress(float(ratios.get("negative", 0.0)), text=f"Negative: {ratios.get('negative', 0.0):.2%}")
+    st.progress(
+        float(ratios.get("positive", 0.0)), text=f"Positive: {ratios.get('positive', 0.0):.2%}"
+    )
+    st.progress(
+        float(ratios.get("neutral", 0.0)), text=f"Neutral: {ratios.get('neutral', 0.0):.2%}"
+    )
+    st.progress(
+        float(ratios.get("negative", 0.0)), text=f"Negative: {ratios.get('negative', 0.0):.2%}"
+    )
 
 
 def render_review_list(title: str, reviews: list[dict[str, Any]]) -> None:
@@ -103,8 +109,12 @@ def main() -> None:
         api_base_url = st.text_input("API base URL", value=DEFAULT_API_BASE)
         query = st.text_input("Search products", value="")
         limit = st.slider("Products per page", min_value=5, max_value=50, value=10, step=5)
-        max_reviews = st.slider("Max reviews for analysis", min_value=20, max_value=200, value=80, step=10)
-        representative_k = st.slider("Representative reviews per sentiment", min_value=1, max_value=10, value=5, step=1)
+        max_reviews = st.slider(
+            "Max reviews for analysis", min_value=20, max_value=200, value=80, step=10
+        )
+        representative_k = st.slider(
+            "Representative reviews per sentiment", min_value=1, max_value=10, value=5, step=1
+        )
         regenerate = st.checkbox("Regenerate insights (ignore cache)", value=False)
 
     if "selected_product_id" not in st.session_state:
@@ -139,7 +149,9 @@ def main() -> None:
             for product in items:
                 title = product.get("product_title") or product.get("product_id")
                 button_label = f"Select: {title[:70]}"
-                if st.button(button_label, key=f"select_{product['product_id']}", use_container_width=True):
+                if st.button(
+                    button_label, key=f"select_{product['product_id']}", use_container_width=True
+                ):
                     st.session_state.selected_product_id = product["product_id"]
 
     with right:
@@ -162,7 +174,9 @@ def main() -> None:
 
         analyze_col, info_col = st.columns([1, 2])
         with analyze_col:
-            analyze_clicked = st.button("Generate Insights", type="primary", use_container_width=True)
+            analyze_clicked = st.button(
+                "Generate Insights", type="primary", use_container_width=True
+            )
 
         with info_col:
             st.caption(
@@ -195,7 +209,9 @@ def main() -> None:
 
             meta_cols = st.columns(4)
             meta_cols[0].metric("Selected reviews", insights.get("selected_review_count", 0))
-            meta_cols[1].metric("Total available reviews", insights.get("total_available_reviews", 0))
+            meta_cols[1].metric(
+                "Total available reviews", insights.get("total_available_reviews", 0)
+            )
             meta_cols[2].metric("Latency (ms)", insights.get("latency_ms", 0.0))
             meta_cols[3].metric("Model version", insights.get("model_version", "N/A"))
 

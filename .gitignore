@@ -63,3 +63,8 @@ crash.*.log
 .DS_Store
 .vscode/
 .idea/
+
+README.md
+# Local infrastructure
+infra/k8s/
+infra/terraform/

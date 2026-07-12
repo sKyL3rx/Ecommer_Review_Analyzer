@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 from typing import Any
 
@@ -8,6 +9,19 @@ import pandas as pd
 REVIEWS_PATH = Path("data/raw/appliances_demo_reviews_full.csv")
 OUTPUT_PATH = Path("data/serving/appliances_demo_reviews.parquet")
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Build serving reviews parquet.")
+    parser.add_argument(
+        "--reviews_path",
+        type=Path,
+        default=Path("data/raw/appliances_reviews_sample_50000.csv"),
+    )
+    parser.add_argument(
+        "--output_path",
+        type=Path,
+        default=Path("data/serving/appliances_demo_reviews.parquet"),
+    )
+    return parser.parse_args()
 
 def clean_text(value: Any) -> str | None:
     if value is None or (isinstance(value, float) and pd.isna(value)):
@@ -17,12 +31,16 @@ def clean_text(value: Any) -> str | None:
 
 
 def main() -> None:
-    if not REVIEWS_PATH.exists():
-        raise FileNotFoundError(f"Missing file: {REVIEWS_PATH}")
+    args = parse_args()
+    reviews_path = args.reviews_path
+    output_path = args.output_path
 
-    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if not reviews_path.exists():
+        raise FileNotFoundError(f"Missing file: {reviews_path}")
 
-    df = pd.read_csv(REVIEWS_PATH)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    df = pd.read_csv(reviews_path)
 
     required_cols = ["product_id", "rating", "review_text"]
     missing = [c for c in required_cols if c not in df.columns]
@@ -98,12 +116,12 @@ def main() -> None:
         kind="stable",
     ).reset_index(drop=True)
 
-    final_df.to_parquet(OUTPUT_PATH, index=False)
+    final_df.to_parquet(output_path, index=False)
 
     print("Done.")
     print(f"reviews rows: {len(final_df):,}")
     print(f"unique products: {final_df['product_id'].nunique():,}")
-    print(f"saved to: {OUTPUT_PATH}")
+    print(f"saved to: {output_path}")
 
 
 if __name__ == "__main__":

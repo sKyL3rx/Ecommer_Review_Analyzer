@@ -1,14 +1,14 @@
 {
-  "train_rows": 138000,
-  "val_rows": 29572,
+  "train_rows": 327142,
+  "val_rows": 70102,
   "train_label_distribution": {
-    "positive": 114877,
-    "negative": 15767,
-    "neutral": 7356
+    "positive": 269296,
+    "negative": 39883,
+    "neutral": 17963
   },
   "val_label_distribution": {
-    "positive": 24617,
-    "negative": 3379,
-    "neutral": 1576
+    "positive": 57706,
+    "negative": 8547,
+    "neutral": 3849
   }
 }

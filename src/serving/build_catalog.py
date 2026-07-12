@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import argparse
 import json
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,24 @@ REVIEWS_PATH = Path("data/raw/appliances_demo_reviews_full.csv")
 META_PATH = Path("data/raw/appliances_demo_meta_full.csv")
 OUTPUT_PATH = Path("data/serving/appliances_demo_catalog.parquet")
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Build serving product catalog parquet.")
+    parser.add_argument(
+        "--reviews_path",
+        type=Path,
+        default=Path("data/raw/appliances_reviews_sample_50000.csv"),
+    )
+    parser.add_argument(
+        "--meta_path",
+        type=Path,
+        default=Path("data/raw/appliances_meta_matched.csv"),
+    )
+    parser.add_argument(
+        "--output_path",
+        type=Path,
+        default=Path("data/serving/appliances_demo_catalog.parquet"),
+    )
+    return parser.parse_args()
 
 def clean_text(value: Any) -> str | None:
     if value is None or (isinstance(value, float) and pd.isna(value)):
@@ -90,15 +109,22 @@ def flatten_text_list(value: Any) -> str | None:
 
 
 def main() -> None:
-    if not REVIEWS_PATH.exists():
-        raise FileNotFoundError(f"Missing file: {REVIEWS_PATH}")
-    if not META_PATH.exists():
-        raise FileNotFoundError(f"Missing file: {META_PATH}")
+    args = parse_args()
+    reviews_path = args.reviews_path
+    meta_path = args.meta_path
+    output_path = args.output_path
 
-    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if not reviews_path.exists():
+        raise FileNotFoundError(f"Missing file: {reviews_path}")
+    if not meta_path.exists():
+        raise FileNotFoundError(f"Missing file: {meta_path}")
+    
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    reviews_df = pd.read_csv(REVIEWS_PATH)
-    meta_df = pd.read_csv(META_PATH)
+    reviews_df = pd.read_csv(reviews_path)
+    meta_df = pd.read_csv(meta_path)
 
     reviews_df["product_id"] = reviews_df["product_id"].astype(str).str.strip()
     meta_df["product_id"] = meta_df["product_id"].astype(str).str.strip()
@@ -189,13 +215,13 @@ def main() -> None:
         kind="stable",
     ).reset_index(drop=True)
 
-    final_df.to_parquet(OUTPUT_PATH, index=False)
+    final_df.to_parquet(output_path, index=False)
+    print(f"saved to: {output_path}")
 
     print("Done.")
     print(f"reviews rows: {len(reviews_df):,}")
     print(f"meta rows: {len(meta_df):,}")
     print(f"catalog rows: {len(final_df):,}")
-    print(f"saved to: {OUTPUT_PATH}")
 
 
 if __name__ == "__main__":

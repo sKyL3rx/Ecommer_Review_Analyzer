@@ -1,12 +1,339 @@
-stages: 
-  preprocess:
-    cmd: python src/data/preprocess.py
+params:
+  - params.yaml
+
+stages:
+  download_raw_sample:
+    cmd: >-
+      python -m scripts.download_data
+      --dataset_name ${data.dataset_name}
+      --category ${data.category}
+      --output_dir ${data.raw_dir}
+      --sample_n ${data.sample_n}
     deps:
-      - src/data/preprocess.py
-      - data/raw/appliances_reviews_sample_200k.csv
-      - params.yaml
+      - scripts/download_data.py
+    params:
+      - data.dataset_name
+      - data.category
+      - data.raw_dir
+      - data.sample_n
+      - data.raw_reviews_path
+      - data.raw_meta_path
     outs:
-      - data/processed/train.csv
-      - data/processed/val.csv
-      - data/processed/test.csv
-    
+      - ${data.raw_reviews_path}
+      - ${data.raw_meta_path}
+
+  preprocess_phase1:
+    cmd: >-
+      python -m src.data.preprocess_phase1
+      --input_reviews ${data.raw_reviews_path}
+      --input_meta ${data.raw_meta_path}
+      --interim_dir ${data.interim_dir}
+      --processed_dir ${data.processed_phase1_dir}
+      ${preprocess_phase1.english_only_flag}
+      --lang_conf_threshold ${preprocess_phase1.lang_conf_threshold}
+      --n_splits ${preprocess_phase1.n_splits}
+      ${preprocess_phase1.save_kfold_flag}
+      --test_size ${preprocess_phase1.test_size}
+      --val_size ${preprocess_phase1.val_size}
+      --random_state ${preprocess_phase1.random_state}
+      --min_review_len ${preprocess_phase1.min_review_len}
+
+    deps:
+      - src/data/preprocess_phase1.py
+      - ${data.raw_reviews_path}
+      - ${data.raw_meta_path}
+
+    params:
+      - data.raw_reviews_path
+      - data.raw_meta_path
+      - data.interim_dir
+      - data.processed_phase1_dir
+      - preprocess_phase1
+
+    outs:
+      - ${data.reviews_clean_path}
+      - ${data.train_val_path}
+      - ${data.train_path}
+      - ${data.val_path}
+      - ${data.test_path}
+
+  train_sentiment_baseline:
+      cmd: >-
+        python -m src.training.train_sentiment_baseline
+        --train_path ${sentiment_training.train_path}
+        --val_path ${sentiment_training.val_path}
+        --text_column ${sentiment_training.text_column}
+        --target_column ${sentiment_training.target_column}
+        --max_features ${sentiment_training.max_features}
+        --ngram_min ${sentiment_training.ngram_min}
+        --ngram_max ${sentiment_training.ngram_max}
+        --min_df ${sentiment_training.min_df}
+        --max_iter ${sentiment_training.max_iter}
+        --class_weight ${sentiment_training.class_weight}
+        --random_state ${sentiment_training.random_state}
+        --model_dir ${sentiment_training.model_dir}
+        --report_dir ${sentiment_training.report_dir}
+        --experiment_name ${sentiment_training.experiment_name}
+        --run_name ${sentiment_training.run_name}
+        ${sentiment_training.disable_mlflow_flag}
+      deps:
+        - src/training/train_sentiment_baseline.py
+        - ${sentiment_training.train_path}
+        - ${sentiment_training.val_path}
+      params:
+        - sentiment_training
+      outs:
+        - ${sentiment_training.vectorizer_path}
+        - ${sentiment_training.model_path}
+        - ${sentiment_training.val_classification_report_path}:
+            cache: false
+        - ${sentiment_training.training_summary_path}:
+            cache: false
+
+      metrics:
+        - ${sentiment_training.val_metrics_path}:
+            cache: false
+  
+  evaluate_sentiment_baseline:
+    cmd: >-
+      python -m src.evaluation.evaluate_sentiment_baseline_model
+      --test_path ${sentiment_eval.test_path}
+      --model_path ${sentiment_eval.model_path}
+      --vectorizer_path ${sentiment_eval.vectorizer_path}
+      --text_column ${sentiment_eval.text_column}
+      --target_column ${sentiment_eval.target_column}
+      --report_dir ${sentiment_eval.report_dir}
+      --experiment_name ${sentiment_eval.experiment_name}
+      --run_name ${sentiment_eval.run_name}
+      ${sentiment_eval.disable_mlflow_flag}
+    deps:
+      - src/evaluation/evaluate_sentiment_baseline_model.py
+      - ${sentiment_eval.test_path}
+      - ${sentiment_eval.model_path}
+      - ${sentiment_eval.vectorizer_path}
+    params:
+      - sentiment_eval
+    metrics:
+      - ${sentiment_eval.metrics_path}:
+          cache: false
+      - ${sentiment_eval.evaluation_summary_path}:
+          cache: false
+    outs:
+      - ${sentiment_eval.classification_report_path}:
+          cache: false
+      - ${sentiment_eval.predictions_path}:
+          cache: false
+      - ${sentiment_eval.confusion_matrix_path}:
+          cache: false
+  
+  preprocess_phase2_review_groups:
+    cmd: >-
+      python -m src.data.preprocess_phase2
+      --input_path ${preprocess_phase2.input_path}
+      --output_jsonl ${preprocess_phase2.output_jsonl}
+      --output_csv ${preprocess_phase2.output_csv}
+      --min_reviews_per_group ${preprocess_phase2.min_reviews_per_group}
+      --max_reviews_per_group ${preprocess_phase2.max_reviews_per_group}
+      --min_group_size ${preprocess_phase2.min_group_size}
+      --similarity_threshold ${preprocess_phase2.similarity_threshold}
+      --weight_helpful ${preprocess_phase2.weight_helpful}
+      --weight_verified ${preprocess_phase2.weight_verified}
+      --weight_length ${preprocess_phase2.weight_length}
+      --ideal_min_len ${preprocess_phase2.ideal_min_len}
+      --ideal_max_len ${preprocess_phase2.ideal_max_len}
+      --hard_max_len ${preprocess_phase2.hard_max_len}
+      ${preprocess_phase2.use_embeddings_flag}
+      --embedding_model ${preprocess_phase2.embedding_model}
+    deps:
+      - src/data/preprocess_phase2.py
+      - ${preprocess_phase2.input_path}
+    params:
+      - preprocess_phase2
+    outs:
+      - ${preprocess_phase2.output_jsonl}
+      - ${preprocess_phase2.output_csv}
+
+  generate_synthetic_gold_summary:
+    cmd: >-
+      python -m scripts.generate_synthetic_gold_summary_via_api
+      --input_path ${synthetic_summary.input_path}
+      --output_path ${synthetic_summary.output_path}
+      --errors_path ${synthetic_summary.errors_path}
+      --provider ${synthetic_summary.provider}
+      --model ${synthetic_summary.model}
+      --top_k ${synthetic_summary.top_k}
+      ${synthetic_summary.max_products_flag}
+      --min_sentiments_present ${synthetic_summary.min_sentiments_present}
+      --sleep_seconds ${synthetic_summary.sleep_seconds}
+      ${synthetic_summary.resume_flag}
+      --max_workers ${synthetic_summary.max_workers}
+    deps:
+      - scripts/generate_synthetic_gold_summary_via_api.py
+      - ${synthetic_summary.input_path}
+    params:
+      - synthetic_summary
+    outs:
+      - ${synthetic_summary.output_path}
+      - ${synthetic_summary.errors_path}:
+          cache: false
+  
+  build_trl_sft_splits:
+    cmd: >-
+      python -m src.data.preprocess_phase2_sft_trl
+      --input_path ${trl_split.input_path}
+      --output_dir ${trl_split.output_dir}
+      --train_path ${trl_split.train_path}
+      --val_path ${trl_split.val_path}
+      --test_path ${trl_split.test_path}
+      --summary_path ${trl_split.summary_path}
+      --test_size ${trl_split.test_size}
+      --val_fraction_of_temp ${trl_split.val_fraction_of_temp}
+      --random_state ${trl_split.random_state}
+    deps:
+      - src/data/preprocess_phase2_sft_trl.py
+      - ${trl_split.input_path}
+    params:
+      - trl_split
+    outs:
+      - ${trl_split.train_path}
+      - ${trl_split.val_path}
+      - ${trl_split.test_path}
+    metrics:
+      - ${trl_split.summary_path}:
+          cache: false
+
+  train_summary_sft:
+    cmd: >-
+      ${sft.launcher} src/training/train_sft.py
+    deps:
+      - src/training/train_sft.py
+      - ${sft.train_path}
+      - ${sft.val_path}
+      - params.yaml
+    params:
+      - sft
+    outs:
+      - ${sft.output_dir}
+    metrics:
+      - ${sft.train_results_path}:
+          cache: false
+      - ${sft.eval_results_path}:
+          cache: false
+  
+  generate_summary_predictions:
+    cmd: >-
+      python -m scripts.summary_model_generation_testset
+      --input_path ${summary_generation.input_path}
+      --output_df ${summary_generation.output_df}
+      --output_metrics ${summary_generation.output_metrics}
+      --base_url ${summary_generation.base_url}
+      --api_key ${summary_generation.api_key}
+      --model_name ${summary_generation.model_name}
+      --max_tokens ${summary_generation.max_tokens}
+      --temperature ${summary_generation.temperature}
+    deps:
+      - scripts/summary_model_generation_testset.py
+      - src/app/clients/summarizer_client.py
+      - ${summary_generation.input_path}
+      - ${sft.adapter_config_path}
+      - ${sft.adapter_model_path}
+    params:
+      - summary_generation
+      - sft.adapter_config_path
+      - sft.adapter_model_path
+    outs:
+      - ${summary_generation.output_df}
+    metrics:
+      - ${summary_generation.output_metrics}:
+          cache: false
+          
+  evaluate_summary_model:
+    cmd: >-
+      python -m src.evaluation.evaluate_summary_model
+      --input_path ${summary_eval.input_path}
+      --output_path ${summary_eval.output_path}
+      --per_sample_output_path ${summary_eval.per_sample_output_path}
+      ${summary_eval.run_judge_flag}
+      --judge_model ${summary_eval.judge_model}
+      --max_workers ${summary_eval.max_workers}
+    deps:
+      - src/evaluation/evaluate_summary_model.py
+      - ${summary_eval.input_path}
+    params:
+      - summary_eval
+    metrics:
+      - ${summary_eval.output_path}:
+          cache: false
+    outs:
+      - ${summary_eval.per_sample_output_path}:
+          cache: false
+
+  register_summary_lora_to_mlflow:
+    cmd: >-
+      python -m scripts.register_summary_lora_to_mlflow
+      --lora-dir ${mlflow_summary.lora_dir}
+      --metrics-path ${mlflow_summary.metrics_path}
+      --registered-model-name ${mlflow_summary.registered_model_name}
+      --experiment-name ${mlflow_summary.experiment_name}
+      --run-name ${mlflow_summary.run_name}
+      --summary-model-version ${mlflow_summary.summary_model_version}
+      --training-env ${mlflow_summary.training_env}
+      --dataset-version ${mlflow_summary.dataset_version}
+      --alias ${mlflow_summary.alias}
+    deps:
+      - scripts/register_summary_lora_to_mlflow.py
+      - ${mlflow_summary.lora_dir}
+      - ${mlflow_summary.metrics_path}
+    params:
+      - mlflow_summary
+  
+  download_serving_data:
+    cmd: >-
+      python -m scripts.download_data
+      --dataset_name ${data.dataset_name}
+      --category ${data.category}
+      --output_dir data/serving
+    deps:
+      - scripts/download_data.py
+    params:
+      - data.dataset_name
+      - data.category
+      - data.raw_serving_reviews_path
+      - data.raw_serving_meta_path
+    outs:
+      - ${data.raw_serving_reviews_path}
+      - ${data.raw_serving_meta_path}
+
+  build_serving_catalog:
+    cmd: >-
+      python -m src.serving.build_catalog
+      --reviews_path ${data.raw_serving_reviews_path}
+      --meta_path ${data.raw_serving_meta_path}
+      --output_path ${serving.catalog_path}
+    deps:
+      - src/serving/build_catalog.py
+      - ${data.raw_serving_reviews_path}
+      - ${data.raw_serving_meta_path}
+    params:
+      - data.raw_serving_reviews_path
+      - data.raw_serving_meta_path
+      - serving.catalog_path
+    outs:
+      - ${serving.catalog_path}
+  
+  build_serving_reviews:
+    cmd: >-
+      python -m src.serving.build_reviews_index
+      --reviews_path ${data.raw_serving_reviews_path}
+      --output_path ${serving.reviews_path}
+    deps:
+      - src/serving/build_reviews_index.py
+      - ${data.raw_serving_reviews_path}
+    params:
+      - data.raw_serving_reviews_path
+      - serving.reviews_path
+    outs:
+      - ${serving.reviews_path}
+
+
+

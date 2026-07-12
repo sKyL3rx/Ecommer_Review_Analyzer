@@ -11,9 +11,7 @@ import pandas as pd
 import requests
 
 API_BASE_URL = os.getenv("BENCH_API_BASE_URL", "http://localhost:8000")
-CONFIG_PATH = Path(
-    os.getenv("BENCH_CONFIG_PATH", "configs/benchmark_system/appliances_test.json")
-)
+CONFIG_PATH = Path(os.getenv("BENCH_CONFIG_PATH", "configs/benchmark_system/appliances_test.json"))
 
 OUTPUT_PATH = Path(
     os.getenv(
@@ -21,6 +19,7 @@ OUTPUT_PATH = Path(
         "artifacts/benchmarks/local_system_benchmark.json",
     )
 )
+
 
 def select_product_ids_from_csv(config: dict[str, Any]) -> list[dict[str, Any]]:
     csv_path = Path(config["csv_path"])
@@ -30,7 +29,7 @@ def select_product_ids_from_csv(config: dict[str, Any]) -> list[dict[str, Any]]:
 
     if not csv_path.exists():
         raise FileNotFoundError(f"CSV file not found: {csv_path}")
-    
+
     df = pd.read_csv(csv_path, usecols=[product_col])
 
     counts = df[product_col].dropna().astype(str).value_counts()
@@ -38,9 +37,7 @@ def select_product_ids_from_csv(config: dict[str, Any]) -> list[dict[str, Any]]:
     selected = counts[counts >= min_reviews].head(top_k)
 
     if selected.empty:
-        raise RuntimeError(
-            f"No products found with at least {min_reviews} reviews in {csv_path}"
-        )
+        raise RuntimeError(f"No products found with at least {min_reviews} reviews in {csv_path}")
 
     return [
         {
@@ -50,18 +47,20 @@ def select_product_ids_from_csv(config: dict[str, Any]) -> list[dict[str, Any]]:
         for product_id, review_count in selected.items()
     ]
 
+
 def load_config() -> dict[str, Any]:
     if not CONFIG_PATH.exists():
         raise FileNotFoundError(f"Benchmark config not found: {CONFIG_PATH}")
 
     return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
 
+
 def timed_request(
-        method: str,
-        path: str,
-        *,
-        json_body: dict[str, Any] | None = None,
-        timeout: int = 60,
+    method: str,
+    path: str,
+    *,
+    json_body: dict[str, Any] | None = None,
+    timeout: int = 60,
 ):
     url = f"{API_BASE_URL}{path}"
     start = time.perf_counter()
@@ -119,12 +118,9 @@ def wait_for_job(
         "poll_samples": poll_samples,
     }
 
+
 def summarize_latencies(samples: list[dict[str, Any]]) -> dict[str, Any]:
-    latencies = [
-        float(sample["latency_ms"])
-        for sample in samples
-        if "latency_ms" in sample
-    ]
+    latencies = [float(sample["latency_ms"]) for sample in samples if "latency_ms" in sample]
 
     if not latencies:
         return {}
@@ -171,7 +167,7 @@ def benchmark_product(
             "get_product_latency_ms": get_product["latency_ms"],
         }
         return result
-    
+
     create_job = timed_request(
         "POST",
         f"/products/{product_id}/insights/jobs",
@@ -198,7 +194,7 @@ def benchmark_product(
             "duration_seconds": None,
             "final_status": None,
         }
-    
+
     result["steps"]["job_wait"] = job_wait
 
     cached_reads = [
@@ -251,13 +247,9 @@ def main() -> None:
         "summary": {},
     }
 
-    health_samples = [
-        timed_request("GET", "/health", timeout=30)
-        for _ in range(5)
-    ]
+    health_samples = [timed_request("GET", "/health", timeout=30) for _ in range(5)]
 
     results["steps"]["health"] = health_samples
-
 
     for item in selected_products:
         product_id = item["product_id"]
@@ -273,7 +265,6 @@ def main() -> None:
         )
         results["products"].append(product_result)
 
-    
     create_job_samples = []
     cached_read_samples = []
     generation_durations = []
@@ -291,13 +282,9 @@ def main() -> None:
             continue
 
         if "create_job_latency_ms" in summary:
-            create_job_samples.append(
-                {"latency_ms": summary["create_job_latency_ms"]}
-            )
+            create_job_samples.append({"latency_ms": summary["create_job_latency_ms"]})
 
-        cached_read_samples.extend(
-            product.get("steps", {}).get("cached_insight_reads", [])
-        )
+        cached_read_samples.extend(product.get("steps", {}).get("cached_insight_reads", []))
 
         status = summary.get("generation_final_status")
         duration = summary.get("generation_duration_seconds")
@@ -321,9 +308,7 @@ def main() -> None:
             "mean": round(statistics.mean(generation_durations), 2)
             if generation_durations
             else None,
-            "max": round(max(generation_durations), 2)
-            if generation_durations
-            else None,
+            "max": round(max(generation_durations), 2) if generation_durations else None,
         },
         "successful_generations": successful_generations,
         "failed_generations": failed_generations,
@@ -342,4 +327,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

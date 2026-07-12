@@ -45,7 +45,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--disable_mlflow",
         action="store_true",
-        default=True,
+        default=False,
         help="Disable MLflow logging even if mlflow is installed.",
     )
     return parser.parse_args()

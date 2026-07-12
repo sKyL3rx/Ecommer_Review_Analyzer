@@ -118,7 +118,11 @@ def main() -> None:
     latencies_ms: list[float] = []
 
     summary_client = VLLMSummaryGenerator(
-        base_url=args.base_url, max_tokens=args.max_tokens, temperature=args.temperature
+        base_url=args.base_url,
+        api_key=args.api_key,
+        model=args.model_name,
+        max_tokens=args.max_tokens,
+        temperature=args.temperature,
     )
     for idx, row in enumerate(rows):
         messages = row.get("messages")
@@ -129,7 +133,7 @@ def main() -> None:
 
         start = time.perf_counter()
 
-        generated_answer = summary_client(prompt=prompt, context="no")
+        generated_answer = summary_client(prompt=prompt, context={})
 
         latency_ms = (time.perf_counter() - start) * 1000.0
 
