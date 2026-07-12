@@ -5,8 +5,20 @@ import argparse
 import json
 from pathlib import Path
 from typing import Any
-
 import pandas as pd
+
+def read_table(path: str | Path) -> pd.DataFrame:
+    path = Path(path)
+    suffix = path.suffix.lower()
+
+    if suffix == ".parquet":
+        return pd.read_parquet(path)
+
+    if suffix == ".csv":
+        return pd.read_csv(path)
+
+    raise ValueError(f"Unsupported input file format: {path}")
+
 
 REVIEWS_PATH = Path("data/raw/appliances_demo_reviews_full.csv")
 META_PATH = Path("data/raw/appliances_demo_meta_full.csv")
@@ -123,8 +135,8 @@ def main() -> None:
     
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    reviews_df = pd.read_csv(reviews_path)
-    meta_df = pd.read_csv(meta_path)
+    reviews_df = read_table(reviews_path)
+    meta_df = read_table(meta_path) 
 
     reviews_df["product_id"] = reviews_df["product_id"].astype(str).str.strip()
     meta_df["product_id"] = meta_df["product_id"].astype(str).str.strip()

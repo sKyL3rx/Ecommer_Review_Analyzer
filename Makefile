@@ -1,5 +1,25 @@
-PYTHON ?= python
 PYTHONPATH_VALUE ?= .
+
+TRAIN_VENV ?= .venv
+SERVING_VENV ?= .venv-serving
+
+TRAIN_PYTHON_BOOTSTRAP ?= python3
+SERVING_PYTHON_BOOTSTRAP ?= python3.13
+
+TRAIN_PYTHON ?= $(TRAIN_VENV)/bin/python
+SERVING_PYTHON ?= $(SERVING_VENV)/bin/python
+
+TRAIN_BIN ?= $(TRAIN_VENV)/bin
+SERVING_BIN ?= $(SERVING_VENV)/bin
+
+TRAIN_ENV = PATH=$(TRAIN_BIN):$$PATH PYTHONPATH=$(PYTHONPATH_VALUE)
+SERVING_ENV = PATH=$(SERVING_BIN):$$PATH PYTHONPATH=$(PYTHONPATH_VALUE)
+
+TRAIN_DVC = $(TRAIN_ENV) $(TRAIN_PYTHON) -m dvc
+SERVING_DVC = PATH=$(SERVING_BIN):$(TRAIN_BIN):$$PATH PYTHONPATH=$(PYTHONPATH_VALUE) $(TRAIN_PYTHON) -m dvc
+
+VLLM_BIN ?= $(TRAIN_BIN)/vllm
+
 COMPOSE_FILE ?= infra/compose/docker-compose.yml
 API_BASE_URL ?= http://localhost:8000
 
@@ -20,7 +40,7 @@ VLLM_MAX_LORA_RANK ?= 16
 VLLM_LOG ?= artifacts/logs/vllm.log
 VLLM_PID_FILE ?= artifacts/logs/vllm.pid
 
-.PHONY: help init doctor \
+.PHONY: help init init-train init-serving init-full doctor \
 	dvc-dag dvc-status clean-repro \
 	download-data preprocess-phase1 train-sentiment eval-sentiment sentiment-e2e \
 	repro-serving \
@@ -35,96 +55,125 @@ VLLM_PID_FILE ?= artifacts/logs/vllm.pid
 
 help:
 	@echo "Setup:"
-	@echo "  make init                     Install local dependencies"
-	@echo "  make doctor                   Check required tools"
+	@echo "  make init                      Install full dependencies into .venv and .venv-serving"
+	@echo "  make init-train                Create .venv and install requirements.txt + requirements-dev.txt"
+	@echo "  make init-serving              Create .venv-serving with Python 3.13 and install requirements-serving.txt"
+	@echo "  make doctor                    Check required tools and envs"
 	@echo ""
 	@echo "DVC graph:"
-	@echo "  make dvc-dag                  Show DVC DAG"
-	@echo "  make dvc-status               Show DVC status"
+	@echo "  make dvc-dag                   Show DVC DAG"
+	@echo "  make dvc-status                Show DVC status"
 	@echo ""
 	@echo "Phase 1 sentiment/data:"
-	@echo "  make download-data            Run download_raw_sample"
-	@echo "  make preprocess-phase1        Run preprocess_phase1"
-	@echo "  make train-sentiment          Run train_sentiment_baseline"
-	@echo "  make eval-sentiment           Run evaluate_sentiment_baseline"
-	@echo "  make sentiment-e2e            Download -> preprocess -> train -> eval sentiment"
+	@echo "  make download-data             Run download_raw_sample"
+	@echo "  make preprocess-phase1         Run preprocess_phase1"
+	@echo "  make train-sentiment           Run train_sentiment_baseline"
+	@echo "  make eval-sentiment            Run evaluate_sentiment_baseline"
+	@echo "  make sentiment-e2e             Download -> preprocess -> train -> eval sentiment"
 	@echo ""
 	@echo "Serving artifacts/API:"
-	@echo "  make repro-serving            Build/validate serving parquet artifacts"
-	@echo "  make compose-up               Start API/Postgres/Redis and run migrations"
-	@echo "  make load-serving-data        Load serving parquet into Postgres"
-	@echo "  make smoke                    API smoke test"
+	@echo "  make repro-serving             Build serving parquet artifacts using .venv-serving"
+	@echo "  make compose-up                Start API/Postgres/Redis and run migrations"
+	@echo "  make load-serving-data         Load serving parquet into Postgres using .venv-serving"
+	@echo "  make smoke                     API smoke test"
 	@echo ""
 	@echo "Phase 2 / synthetic / TRL:"
-	@echo "  make phase2-groups            Run preprocess_phase2_review_groups"
-	@echo "  make synthetic-summary        Run generate_synthetic_gold_summary"
-	@echo "  make trl-splits               Run build_trl_sft_splits"
-	@echo "  make summary-data-e2e         Phase2 -> synthetic summaries -> TRL splits"
+	@echo "  make phase2-groups             Run preprocess_phase2_review_groups"
+	@echo "  make synthetic-summary         Run generate_synthetic_gold_summary"
+	@echo "  make trl-splits                Run build_trl_sft_splits"
+	@echo "  make summary-data-e2e          Phase2 -> synthetic summaries -> TRL splits"
 	@echo ""
 	@echo "SFT + vLLM:"
-	@echo "  make train-summary-sft        Train SFT/QLoRA LoRA adapter"
-	@echo "  make serve-vllm               Run vLLM foreground"
-	@echo "  make serve-vllm-bg            Run vLLM background"
-	@echo "  make wait-vllm                Wait for vLLM /models"
-	@echo "  make stop-vllm                Stop background vLLM"
-	@echo "  make restart-vllm             Restart background vLLM"
-	@echo "  make summary-predict          Generate test predictions via vLLM"
-	@echo "  make summary-eval             Evaluate generated summaries"
-	@echo "  make summary-vllm-e2e         vLLM ready -> predict -> eval"
+	@echo "  make train-summary-sft         Train SFT/QLoRA LoRA adapter using .venv"
+	@echo "  make serve-vllm                Run vLLM foreground using .venv"
+	@echo "  make serve-vllm-bg             Run vLLM background using .venv"
+	@echo "  make wait-vllm                 Wait for vLLM /models"
+	@echo "  make stop-vllm                 Stop background vLLM"
+	@echo "  make restart-vllm              Restart background vLLM"
+	@echo "  make summary-predict           Generate test predictions via vLLM"
+	@echo "  make summary-eval              Evaluate generated summaries"
+	@echo "  make summary-vllm-e2e          vLLM ready -> predict -> eval"
 	@echo ""
 	@echo "Full E2E:"
-	@echo "  make bootstrap-local          FULL E2E including vLLM"
-	@echo "  make bootstrap-full           Alias for bootstrap-local"
-	@echo "  make full-e2e                 Alias for bootstrap-local"
+	@echo "  make bootstrap-local           TRUE FULL E2E including vLLM"
+	@echo "  make bootstrap-full            Alias for bootstrap-local"
+	@echo "  make full-e2e                  Alias for bootstrap-local"
 	@echo ""
 	@echo "Benchmark:"
 	@echo "  make benchmark-local"
 	@echo "  make benchmark-cold-cache"
 
-init:
-	$(PYTHON) -m pip install --upgrade pip
-	$(PYTHON) -m pip install -r requirements-serving.txt -r requirements-dev.txt
+init: init-full
+
+init-train:
+	$(TRAIN_PYTHON_BOOTSTRAP) -m venv $(TRAIN_VENV)
+	$(TRAIN_PYTHON) -m pip install --upgrade pip setuptools wheel
+	$(TRAIN_PYTHON) -m pip install -r requirements.txt
+	$(TRAIN_PYTHON) -m pip install -r requirements-dev.txt
+
+init-serving:
+	$(SERVING_PYTHON_BOOTSTRAP) -m venv $(SERVING_VENV)
+	$(SERVING_PYTHON) -m pip install --upgrade pip setuptools wheel
+	$(SERVING_PYTHON) -m pip install -r requirements-serving.txt
+
+init-full: init-train init-serving
 
 doctor:
-	$(PYTHON) --version
+	@echo "Training/E2E env:"
+	$(TRAIN_PYTHON) --version
+	$(TRAIN_PYTHON) -m pip --version
+	$(TRAIN_PYTHON) -m dvc --version
+	@echo ""
+	@echo "Serving env:"
+	$(SERVING_PYTHON) --version
+	$(SERVING_PYTHON) -m pip --version
+	@echo ""
+	@echo "vLLM:"
+	@if [ -x "$(VLLM_BIN)" ]; then \
+		$(VLLM_BIN) --version || true; \
+	else \
+		echo "vLLM binary not found at $(VLLM_BIN). Install it in $(TRAIN_VENV) if full vLLM E2E is needed."; \
+	fi
+	@echo ""
 	git --version
-	dvc --version
 	docker --version
 	docker compose version
 
 dvc-dag:
-	dvc dag
+	$(TRAIN_DVC) dag
 
 dvc-status:
-	dvc status
+	$(TRAIN_DVC) status
 
 clean-repro:
 	rm -rf data/raw data/interim data/processed data/serving data/cache
 	rm -rf artifacts/models artifacts/reports artifacts/predictions artifacts/eval artifacts/benchmarks artifacts/logs
 	rm -f dvc.lock
 
-# ---------- DVC: Phase 1 sentiment/data ----------
+# ---------- DVC: Phase 1 sentiment/data using .venv ----------
 
 download-data:
-	PYTHONPATH=$(PYTHONPATH_VALUE) dvc repro download_raw_sample
+	$(TRAIN_DVC) repro download_raw_sample
 
 preprocess-phase1:
-	PYTHONPATH=$(PYTHONPATH_VALUE) dvc repro preprocess_phase1
+	$(TRAIN_DVC) repro preprocess_phase1
 
 train-sentiment:
-	PYTHONPATH=$(PYTHONPATH_VALUE) dvc repro train_sentiment_baseline
+	$(TRAIN_DVC) repro train_sentiment_baseline
 
 eval-sentiment:
-	PYTHONPATH=$(PYTHONPATH_VALUE) dvc repro evaluate_sentiment_baseline
+	$(TRAIN_DVC) repro evaluate_sentiment_baseline
 
 sentiment-e2e:
-	PYTHONPATH=$(PYTHONPATH_VALUE) dvc repro evaluate_sentiment_baseline
+	$(TRAIN_DVC) repro evaluate_sentiment_baseline
 
-# ---------- DVC: serving parquet artifacts ----------
+# ---------- DVC: serving parquet artifacts using .venv-serving for stage commands ----------
+# DVC itself runs from .venv, but stage commands resolve python from .venv-serving first.
 
 repro-serving:
-	PYTHONPATH=$(PYTHONPATH_VALUE) dvc repro build_serving_catalog
-	PYTHONPATH=$(PYTHONPATH_VALUE) dvc repro build_serving_reviews
+	$(TRAIN_DVC) repro download_serving_data
+	$(SERVING_DVC) repro build_serving_catalog
+	$(SERVING_DVC) repro build_serving_reviews
 
 # ---------- Local API serving ----------
 
@@ -142,8 +191,8 @@ migrate:
 	docker compose -f $(COMPOSE_FILE) run --rm migrate
 
 load-serving-data:
-	PYTHONPATH=$(PYTHONPATH_VALUE) DATABASE_URL="$(LOCAL_DATABASE_URL)" \
-	$(PYTHON) -m scripts.load_serving_data_to_postgres \
+	$(SERVING_ENV) DATABASE_URL="$(LOCAL_DATABASE_URL)" \
+	$(SERVING_PYTHON) -m scripts.load_serving_data_to_postgres \
 		--catalog_path $(CATALOG_PATH) \
 		--reviews_path $(REVIEWS_PATH)
 
@@ -151,29 +200,29 @@ smoke:
 	curl -f $(API_BASE_URL)/health
 	curl -f "$(API_BASE_URL)/products?limit=5"
 
-# ---------- DVC: Phase 2 / synthetic / TRL ----------
+# ---------- DVC: Phase 2 / synthetic / TRL using .venv ----------
 
 phase2-groups:
-	PYTHONPATH=$(PYTHONPATH_VALUE) dvc repro preprocess_phase2_review_groups
+	$(TRAIN_DVC) repro preprocess_phase2_review_groups
 
 synthetic-summary:
-	PYTHONPATH=$(PYTHONPATH_VALUE) dvc repro generate_synthetic_gold_summary
+	$(TRAIN_DVC) repro generate_synthetic_gold_summary
 
 trl-splits:
-	PYTHONPATH=$(PYTHONPATH_VALUE) dvc repro build_trl_sft_splits
+	$(TRAIN_DVC) repro build_trl_sft_splits
 
 summary-data-e2e:
-	PYTHONPATH=$(PYTHONPATH_VALUE) dvc repro build_trl_sft_splits
+	$(TRAIN_DVC) repro build_trl_sft_splits
 
-# ---------- DVC: train SFT ----------
+# ---------- DVC: train SFT using .venv ----------
 
 train-summary-sft:
-	PYTHONPATH=$(PYTHONPATH_VALUE) dvc repro train_summary_sft
+	$(TRAIN_DVC) repro train_summary_sft
 
-# ---------- vLLM LoRA serving ----------
+# ---------- vLLM LoRA serving using .venv ----------
 
 serve-vllm:
-	vllm serve $(VLLM_BASE_MODEL) \
+	$(TRAIN_ENV) $(VLLM_BIN) serve $(VLLM_BASE_MODEL) \
 		--host $(VLLM_HOST) \
 		--port $(VLLM_PORT) \
 		--enable-lora \
@@ -187,7 +236,7 @@ serve-vllm-bg:
 		echo "vLLM already running with PID $$(cat $(VLLM_PID_FILE))"; \
 	else \
 		echo "Starting vLLM in background..."; \
-		nohup vllm serve $(VLLM_BASE_MODEL) \
+		$(TRAIN_ENV) nohup $(VLLM_BIN) serve $(VLLM_BASE_MODEL) \
 			--host $(VLLM_HOST) \
 			--port $(VLLM_PORT) \
 			--enable-lora \
@@ -223,24 +272,24 @@ stop-vllm:
 
 restart-vllm: stop-vllm serve-vllm-bg wait-vllm
 
-# ---------- DVC: vLLM prediction + summary evaluation ----------
+# ---------- DVC: vLLM prediction + summary evaluation using .venv ----------
 
 summary-predict: wait-vllm
-	PYTHONPATH=$(PYTHONPATH_VALUE) dvc repro generate_summary_predictions
+	$(TRAIN_DVC) repro generate_summary_predictions
 
 summary-eval:
-	PYTHONPATH=$(PYTHONPATH_VALUE) dvc repro evaluate_summary_model
+	$(TRAIN_DVC) repro evaluate_summary_model
 
 summary-vllm-e2e: wait-vllm
-	PYTHONPATH=$(PYTHONPATH_VALUE) dvc repro evaluate_summary_model
+	$(TRAIN_DVC) repro evaluate_summary_model
 
 register-summary-lora:
-	PYTHONPATH=$(PYTHONPATH_VALUE) dvc repro register_summary_lora_to_mlflow
+	$(TRAIN_DVC) repro register_summary_lora_to_mlflow
 
-# ---------- Benchmarks ----------
+# ---------- Benchmarks using .venv-serving ----------
 
 benchmark-local:
-	PYTHONPATH=$(PYTHONPATH_VALUE) $(PYTHON) scripts/benchmark_local_serving.py \
+	$(SERVING_ENV) $(SERVING_PYTHON) scripts/benchmark_local_serving.py \
 		--api-base-url $(API_BASE_URL) \
 		--product-limit 10 \
 		--requests 100 \
@@ -250,7 +299,7 @@ benchmark-local:
 		--output artifacts/benchmarks/local_serving_benchmark.json
 
 benchmark-cold-cache:
-	PYTHONPATH=$(PYTHONPATH_VALUE) $(PYTHON) scripts/benchmark_local_serving.py \
+	$(SERVING_ENV) $(SERVING_PYTHON) scripts/benchmark_local_serving.py \
 		--api-base-url $(API_BASE_URL) \
 		--product-limit 10 \
 		--requests 100 \
@@ -260,13 +309,19 @@ benchmark-cold-cache:
 		--flush-redis-before-run \
 		--output artifacts/benchmarks/local_serving_benchmark_cold_cache.json
 
-# ---------- FULL E2E ----------
+# ---------- TRUE FULL E2E ----------
+# Includes:
+# download -> preprocess -> train/eval sentiment
+# serving parquet -> compose API -> load DB -> smoke
+# phase2 -> synthetic -> TRL
+# train SFT -> start vLLM -> predict via vLLM -> eval summary
+# benchmark API
 
 bootstrap-local: sentiment-e2e repro-serving compose-up load-serving-data smoke summary-data-e2e train-summary-sft restart-vllm summary-predict summary-eval benchmark-local
 	@echo "TRUE FULL E2E completed."
 	@echo "API docs: $(API_BASE_URL)/docs"
 	@echo "vLLM endpoint: $(VLLM_BASE_URL)"
-	@echo "vLLM logs: $(VLLM_LOG)
+	@echo "vLLM logs: $(VLLM_LOG)"
 
 bootstrap-full: bootstrap-local
 
@@ -275,22 +330,22 @@ full-e2e: bootstrap-local
 # ---------- Tests / quality ----------
 
 test-unit:
-	PYTHONPATH=$(PYTHONPATH_VALUE) $(PYTHON) -m pytest tests/unit -q
+	$(TRAIN_ENV) $(TRAIN_PYTHON) -m pytest tests/unit -q
 
 test-integration:
-	PYTHONPATH=$(PYTHONPATH_VALUE) \
+	$(SERVING_ENV) \
 	DATABASE_URL="$(LOCAL_DATABASE_URL)" \
 	REDIS_URL="$(LOCAL_REDIS_URL)" \
 	USE_FAKE_SUMMARIZER=true \
 	USE_FAKE_SENTIMENT=true \
 	AUTO_CREATE_TABLES=false \
-	$(PYTHON) -m pytest tests/integration -q
+	$(SERVING_PYTHON) -m pytest tests/integration -q
 
 lint:
-	ruff check src scripts tests
+	$(TRAIN_ENV) $(TRAIN_PYTHON) -m ruff check src scripts tests
 
 format:
-	ruff check src scripts tests --fix
-	ruff format src scripts tests
+	$(TRAIN_ENV) $(TRAIN_PYTHON) -m ruff check src scripts tests --fix
+	$(TRAIN_ENV) $(TRAIN_PYTHON) -m ruff format src scripts tests
 
 ci-local: lint test-unit

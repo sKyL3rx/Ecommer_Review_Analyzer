@@ -11,8 +11,8 @@ data:
   raw_reviews_path: data/raw/appliances_reviews_sample_500000.csv
   raw_meta_path: data/raw/appliances_meta_matched.csv
 
-  raw_serving_reviews_path: data/serving/appliances_reviews_full.csv
-  raw_serving_meta_path: data/serving/appliances_meta_full.csv
+  raw_serving_reviews_path: data/serving/appliances_reviews_full.parquet
+  raw_serving_meta_path: data/serving/appliances_meta_full.parquet
 
   interim_dir: data/interim
   reviews_clean_path: data/interim/reviews_clean.csv

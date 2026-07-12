@@ -6,6 +6,18 @@ from typing import Any
 
 import pandas as pd
 
+def read_table(path: str | Path) -> pd.DataFrame:
+    path = Path(path)
+    suffix = path.suffix.lower()
+
+    if suffix == ".parquet":
+        return pd.read_parquet(path)
+
+    if suffix == ".csv":
+        return pd.read_csv(path)
+
+    raise ValueError(f"Unsupported input file format: {path}")
+
 REVIEWS_PATH = Path("data/raw/appliances_demo_reviews_full.csv")
 OUTPUT_PATH = Path("data/serving/appliances_demo_reviews.parquet")
 
@@ -40,7 +52,7 @@ def main() -> None:
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    df = pd.read_csv(reviews_path)
+    reviews_df = read_table(reviews_path)
 
     required_cols = ["product_id", "rating", "review_text"]
     missing = [c for c in required_cols if c not in df.columns]
