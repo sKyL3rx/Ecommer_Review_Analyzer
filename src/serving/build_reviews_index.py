@@ -6,6 +6,7 @@ from typing import Any
 
 import pandas as pd
 
+
 def read_table(path: str | Path) -> pd.DataFrame:
     path = Path(path)
     suffix = path.suffix.lower()
@@ -52,7 +53,7 @@ def main() -> None:
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    reviews_df = read_table(reviews_path)
+    df = read_table(reviews_path)
 
     required_cols = ["product_id", "rating", "review_text"]
     missing = [c for c in required_cols if c not in df.columns]

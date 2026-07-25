@@ -11,7 +11,6 @@ from huggingface_hub import hf_hub_url
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-
 OUT_DIR = Path("data/raw")
 DEFAULT_CHUNK_SIZE = 10_000
 

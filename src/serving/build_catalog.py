@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-import ast
 import argparse
+import ast
 import json
 from pathlib import Path
 from typing import Any
+
 import pandas as pd
+
 
 def read_table(path: str | Path) -> pd.DataFrame:
     path = Path(path)
