@@ -1,0 +1,548 @@
+schema: '2.0'
+stages:
+  download_raw_sample:
+    cmd: python -m scripts.download_data --dataset_name 
+      McAuley-Lab/Amazon-Reviews-2023 --category Appliances --output_dir 
+      data/raw --sample_n 500000
+    deps:
+    - path: scripts/download_data.py
+      hash: md5
+      md5: c22ad61f54c64bdd84aa0d0094706ad6
+      size: 18098
+      isexec: true
+    params:
+      params.yaml:
+        data.category: Appliances
+        data.dataset_name: McAuley-Lab/Amazon-Reviews-2023
+        data.raw_dir: data/raw
+        data.raw_meta_path: data/raw/appliances_meta_matched.csv
+        data.raw_reviews_path: data/raw/appliances_reviews_sample_500000.csv
+        data.sample_n: 500000
+    outs:
+    - path: data/raw/appliances_meta_matched.csv
+      hash: md5
+      md5: 49bc4b515be30f614a1b639324d0aa38
+      size: 139450827
+      isexec: true
+    - path: data/raw/appliances_reviews_sample_500000.csv
+      hash: md5
+      md5: c96ff595add1cb1b881b09b7e534a014
+      size: 136355852
+      isexec: true
+  preprocess_phase1:
+    cmd: python -m src.data.preprocess_phase1 --input_reviews 
+      data/raw/appliances_reviews_sample_500000.csv --input_meta 
+      data/raw/appliances_meta_matched.csv --interim_dir data/interim 
+      --processed_dir data/processed/phase1 --english_only --lang_conf_threshold
+      0.9 --n_splits 5 --save_kfold --test_size 0.15 --val_size 0.15 
+      --random_state 42 --min_review_len 3
+    deps:
+    - path: data/raw/appliances_meta_matched.csv
+      hash: md5
+      md5: 49bc4b515be30f614a1b639324d0aa38
+      size: 139450827
+      isexec: true
+    - path: data/raw/appliances_reviews_sample_500000.csv
+      hash: md5
+      md5: c96ff595add1cb1b881b09b7e534a014
+      size: 136355852
+      isexec: true
+    - path: src/data/preprocess_phase1.py
+      hash: md5
+      md5: ffd97a30a4d26595c1d959292a87c4b5
+      size: 14270
+      isexec: true
+    params:
+      params.yaml:
+        data.interim_dir: data/interim
+        data.processed_phase1_dir: data/processed/phase1
+        data.raw_meta_path: data/raw/appliances_meta_matched.csv
+        data.raw_reviews_path: data/raw/appliances_reviews_sample_500000.csv
+        preprocess_phase1:
+          english_only_flag: --english_only
+          lang_conf_threshold: 0.9
+          n_splits: 5
+          save_kfold_flag: --save_kfold
+          test_size: 0.15
+          val_size: 0.15
+          random_state: 42
+          min_review_len: 3
+    outs:
+    - path: data/interim/reviews_clean.csv
+      hash: md5
+      md5: 278c1a67bbdc856756de86bdc132600a
+      size: 316645359
+      isexec: true
+    - path: data/processed/phase1/test.csv
+      hash: md5
+      md5: 4377a1654b748df185e4d8888b469b73
+      size: 47497396
+      isexec: true
+    - path: data/processed/phase1/train.csv
+      hash: md5
+      md5: 3167078f3cbd8dd553833bca27cfa15e
+      size: 221816539
+      isexec: true
+    - path: data/processed/phase1/train_val.csv
+      hash: md5
+      md5: 62497a7cd73513f211a14ee4113b5016
+      size: 269148180
+      isexec: true
+    - path: data/processed/phase1/val.csv
+      hash: md5
+      md5: a5334ce36c3ee0d6e20004131c8d2c3d
+      size: 47331858
+      isexec: true
+  train_sentiment_baseline:
+    cmd: python -m src.training.train_sentiment_baseline --train_path 
+      data/processed/phase1/train.csv --val_path data/processed/phase1/val.csv 
+      --text_column text --target_column sentiment_label --max_features 30000 
+      --ngram_min 1 --ngram_max 2 --min_df 2 --max_iter 1000 --class_weight 
+      balanced --random_state 42 --model_dir artifacts/models --report_dir 
+      artifacts/reports --experiment_name amazon_appliances_sentiment --run_name
+      tfidf_logreg_baseline --disable_mlflow
+    deps:
+    - path: data/processed/phase1/train.csv
+      hash: md5
+      md5: 3167078f3cbd8dd553833bca27cfa15e
+      size: 221816539
+      isexec: true
+    - path: data/processed/phase1/val.csv
+      hash: md5
+      md5: a5334ce36c3ee0d6e20004131c8d2c3d
+      size: 47331858
+      isexec: true
+    - path: src/training/train_sentiment_baseline.py
+      hash: md5
+      md5: 864542981069064a7086651b5fd7ccf1
+      size: 9104
+      isexec: true
+    params:
+      params.yaml:
+        sentiment_training:
+          train_path: data/processed/phase1/train.csv
+          val_path: data/processed/phase1/val.csv
+          text_column: text
+          target_column: sentiment_label
+          max_features: 30000
+          ngram_min: 1
+          ngram_max: 2
+          min_df: 2
+          max_iter: 1000
+          class_weight: balanced
+          random_state: 42
+          model_dir: artifacts/models
+          report_dir: artifacts/reports
+          vectorizer_path: artifacts/models/tfidf.joblib
+          model_path: artifacts/models/sentiment_model.joblib
+          val_metrics_path: artifacts/reports/val_metrics.json
+          val_classification_report_path: 
+            artifacts/reports/val_classification_report.txt
+          training_summary_path: artifacts/reports/training_summary.json
+          experiment_name: amazon_appliances_sentiment
+          run_name: tfidf_logreg_baseline
+          disable_mlflow: true
+          disable_mlflow_flag: --disable_mlflow
+    outs:
+    - path: artifacts/models/sentiment_model.joblib
+      hash: md5
+      md5: 19ff6e57f459853f5afd6809933f0ffe
+      size: 721039
+      isexec: true
+    - path: artifacts/models/tfidf.joblib
+      hash: md5
+      md5: 3dbb546972eb179762b6a1e962d581e2
+      size: 1173492
+      isexec: true
+    - path: artifacts/reports/training_summary.json
+      hash: md5
+      md5: 8cd1a086525d5a393f7fc7f46b541c64
+      size: 252
+      isexec: true
+    - path: artifacts/reports/val_classification_report.txt
+      hash: md5
+      md5: 1f738080af7f4689a52acf64a3ac9da7
+      size: 380
+      isexec: true
+    - path: artifacts/reports/val_metrics.json
+      hash: md5
+      md5: a694556774064d482b8ff1b5c6bda73a
+      size: 149
+      isexec: true
+  evaluate_sentiment_baseline:
+    cmd: python -m src.evaluation.evaluate_sentiment_baseline_model --test_path 
+      data/processed/phase1/test.csv --model_path 
+      artifacts/models/sentiment_model.joblib --vectorizer_path 
+      artifacts/models/tfidf.joblib --text_column text --target_column 
+      sentiment_label --report_dir artifacts/reports --experiment_name 
+      amazon_appliances_sentiment --run_name tfidf_logreg_test_eval 
+      --disable_mlflow
+    deps:
+    - path: artifacts/models/sentiment_model.joblib
+      hash: md5
+      md5: 19ff6e57f459853f5afd6809933f0ffe
+      size: 721039
+      isexec: true
+    - path: artifacts/models/tfidf.joblib
+      hash: md5
+      md5: 3dbb546972eb179762b6a1e962d581e2
+      size: 1173492
+      isexec: true
+    - path: data/processed/phase1/test.csv
+      hash: md5
+      md5: 4377a1654b748df185e4d8888b469b73
+      size: 47497396
+      isexec: true
+    - path: src/evaluation/evaluate_sentiment_baseline_model.py
+      hash: md5
+      md5: 50f3cf53970712289968d6df666f2ee8
+      size: 8892
+      isexec: true
+    params:
+      params.yaml:
+        sentiment_eval:
+          test_path: data/processed/phase1/test.csv
+          model_path: artifacts/models/sentiment_model.joblib
+          vectorizer_path: artifacts/models/tfidf.joblib
+          text_column: text
+          target_column: sentiment_label
+          report_dir: artifacts/reports
+          metrics_path: artifacts/reports/metrics.json
+          classification_report_path: 
+            artifacts/reports/classification_report.txt
+          confusion_matrix_path: artifacts/reports/confusion_matrix.png
+          predictions_path: artifacts/reports/test_predictions.csv
+          evaluation_summary_path: artifacts/reports/evaluation_summary.json
+          experiment_name: amazon_appliances_sentiment
+          run_name: tfidf_logreg_test_eval
+          disable_mlflow: true
+          disable_mlflow_flag: --disable_mlflow
+    outs:
+    - path: artifacts/reports/classification_report.txt
+      hash: md5
+      md5: a7d8a4f914ec287dec7aafd7ce915697
+      size: 380
+      isexec: true
+    - path: artifacts/reports/confusion_matrix.png
+      hash: md5
+      md5: 98b33a181ba41fc3b983641212ed8888
+      size: 46356
+      isexec: true
+    - path: artifacts/reports/evaluation_summary.json
+      hash: md5
+      md5: 77f14ffa13ea3904964d64051f76cfb9
+      size: 231
+      isexec: true
+    - path: artifacts/reports/metrics.json
+      hash: md5
+      md5: c3421fd098c0733b9aad8c8f91a63e40
+      size: 271
+      isexec: true
+    - path: artifacts/reports/test_predictions.csv
+      hash: md5
+      md5: 98cb3b5b74ca6e28955e846ba094a172
+      size: 53678793
+      isexec: true
+  preprocess_phase2_review_groups:
+    cmd: python -m src.data.preprocess_phase2 --input_path 
+      data/interim/reviews_clean.csv --output_jsonl 
+      data/processed/phase2/product_sentiment_groups_ranked.jsonl --output_csv 
+      data/processed/phase2/product_sentiment_group_stats_ranked.csv 
+      --min_reviews_per_group 3 --max_reviews_per_group 6 --min_group_size 3 
+      --similarity_threshold 0.82 --weight_helpful 0.4 --weight_verified 0.3 
+      --weight_length 0.3 --ideal_min_len 20 --ideal_max_len 100 --hard_max_len 
+      250 --use_embeddings --embedding_model 
+      sentence-transformers/all-MiniLM-L6-v2
+    deps:
+    - path: data/interim/reviews_clean.csv
+      hash: md5
+      md5: 278c1a67bbdc856756de86bdc132600a
+      size: 316645359
+      isexec: true
+    - path: src/data/preprocess_phase2.py
+      hash: md5
+      md5: ee0e66710ca37a4928ea4fe6ddd0bda3
+      size: 15954
+      isexec: true
+    params:
+      params.yaml:
+        preprocess_phase2:
+          input_path: data/interim/reviews_clean.csv
+          output_jsonl: 
+            data/processed/phase2/product_sentiment_groups_ranked.jsonl
+          output_csv: 
+            data/processed/phase2/product_sentiment_group_stats_ranked.csv
+          min_reviews_per_group: 3
+          max_reviews_per_group: 6
+          min_group_size: 3
+          similarity_threshold: 0.82
+          weight_helpful: 0.4
+          weight_verified: 0.3
+          weight_length: 0.3
+          ideal_min_len: 20
+          ideal_max_len: 100
+          hard_max_len: 250
+          use_embeddings: true
+          use_embeddings_flag: --use_embeddings
+          embedding_model: sentence-transformers/all-MiniLM-L6-v2
+    outs:
+    - path: data/processed/phase2/product_sentiment_group_stats_ranked.csv
+      hash: md5
+      md5: 495e67bb1411b9b8c5ff0c79208611d2
+      size: 3578941
+      isexec: true
+    - path: data/processed/phase2/product_sentiment_groups_ranked.jsonl
+      hash: md5
+      md5: d71e274a559b055862d8d93ecf575edb
+      size: 137089559
+      isexec: true
+  generate_synthetic_gold_summary:
+    cmd: python -m scripts.generate_synthetic_gold_summary_via_api --input_path 
+      data/processed/phase2/product_sentiment_groups_ranked.jsonl --output_path 
+      data/processed/phase2/phase2_sft_summary_dataset.jsonl --errors_path 
+      data/processed/phase2/phase2_sft_summary_errors.jsonl --provider gemini 
+      --model gemini-2.5-flash-lite --top_k 5  --min_sentiments_present 2 
+      --sleep_seconds 0.3  --max_workers 4
+    deps:
+    - path: data/processed/phase2/product_sentiment_groups_ranked.jsonl
+      hash: md5
+      md5: d71e274a559b055862d8d93ecf575edb
+      size: 137089559
+      isexec: true
+    - path: scripts/generate_synthetic_gold_summary_via_api.py
+      hash: md5
+      md5: 4593141dcd43c65e98631b895e1cecc4
+      size: 13275
+      isexec: true
+    params:
+      params.yaml:
+        synthetic_summary:
+          input_path: 
+            data/processed/phase2/product_sentiment_groups_ranked.jsonl
+          output_path: data/processed/phase2/phase2_sft_summary_dataset.jsonl
+          errors_path: data/processed/phase2/phase2_sft_summary_errors.jsonl
+          provider: gemini
+          model: gemini-2.5-flash-lite
+          top_k: 5
+          max_products_flag: ''
+          min_sentiments_present: 2
+          sleep_seconds: 0.3
+          resume: false
+          resume_flag: ''
+          max_workers: 4
+    outs:
+    - path: data/processed/phase2/phase2_sft_summary_dataset.jsonl
+      hash: md5
+      md5: 4d3d4748ceb8af29f52af3a7a3d3e5d3
+      size: 37797022
+      isexec: true
+    - path: data/processed/phase2/phase2_sft_summary_errors.jsonl
+      hash: md5
+      md5: 41c8845d9116b0b94680c6618eb8026a
+      size: 487
+      isexec: true
+  build_trl_sft_splits:
+    cmd: python -m src.data.preprocess_phase2_sft_trl --input_path 
+      data/processed/phase2/phase2_sft_summary_dataset.jsonl --output_dir 
+      data/processed/phase2/trl_data --train_path 
+      data/processed/phase2/trl_data/train.jsonl --val_path 
+      data/processed/phase2/trl_data/val.jsonl --test_path 
+      data/processed/phase2/trl_data/test.jsonl --summary_path 
+      data/processed/phase2/trl_data/split_summary.json --test_size 0.2 
+      --val_fraction_of_temp 0.5 --random_state 42
+    deps:
+    - path: data/processed/phase2/phase2_sft_summary_dataset.jsonl
+      hash: md5
+      md5: 4d3d4748ceb8af29f52af3a7a3d3e5d3
+      size: 37797022
+      isexec: true
+    - path: src/data/preprocess_phase2_sft_trl.py
+      hash: md5
+      md5: 48b696cf20641c48f51ec6486f29d6df
+      size: 5503
+      isexec: true
+    params:
+      params.yaml:
+        trl_split:
+          input_path: data/processed/phase2/phase2_sft_summary_dataset.jsonl
+          output_dir: data/processed/phase2/trl_data
+          train_path: data/processed/phase2/trl_data/train.jsonl
+          val_path: data/processed/phase2/trl_data/val.jsonl
+          test_path: data/processed/phase2/trl_data/test.jsonl
+          summary_path: data/processed/phase2/trl_data/split_summary.json
+          test_size: 0.2
+          val_fraction_of_temp: 0.5
+          random_state: 42
+    outs:
+    - path: data/processed/phase2/trl_data/split_summary.json
+      hash: md5
+      md5: 68f3d2ddce242b8c46b8cb4a3f81dab7
+      size: 338
+      isexec: true
+    - path: data/processed/phase2/trl_data/test.jsonl
+      hash: md5
+      md5: 4e8c418a8f61e7566538bc23981c8180
+      size: 2132602
+      isexec: true
+    - path: data/processed/phase2/trl_data/train.jsonl
+      hash: md5
+      md5: e9650ad7e8e35d966921194e2e8bdb2e
+      size: 16578508
+      isexec: true
+    - path: data/processed/phase2/trl_data/val.jsonl
+      hash: md5
+      md5: be9c361b17f80ef69201c277ae4181b5
+      size: 2080425
+      isexec: true
+  train_summary_sft:
+    cmd: accelerate launch src/training/train_sft.py
+    deps:
+    - path: data/processed/phase2/trl_data/train.jsonl
+      hash: md5
+      md5: e9650ad7e8e35d966921194e2e8bdb2e
+      size: 16578508
+      isexec: true
+    - path: data/processed/phase2/trl_data/val.jsonl
+      hash: md5
+      md5: be9c361b17f80ef69201c277ae4181b5
+      size: 2080425
+      isexec: true
+    - path: params.yaml
+      hash: md5
+      md5: 26c49cf6fb26f21a841a26b5da0b20ec
+      size: 6438
+      isexec: true
+    - path: src/training/train_sft.py
+      hash: md5
+      md5: 187775b231e3bff277e84cfd98dbc51a
+      size: 12991
+      isexec: true
+    params:
+      params.yaml:
+        sft:
+          launcher: accelerate launch
+          train_path: data/processed/phase2/trl_data/train.jsonl
+          val_path: data/processed/phase2/trl_data/val.jsonl
+          test_path: data/processed/phase2/trl_data/test.jsonl
+          model_name: Qwen/Qwen2.5-3B-Instruct
+          output_dir: artifacts/models/summary_sft
+          adapter_config_path: artifacts/models/summary_sft/adapter_config.json
+          adapter_model_path: 
+            artifacts/models/summary_sft/adapter_model.safetensors
+          train_results_path: artifacts/reports/summary_sft/train_results.json
+          eval_results_path: artifacts/reports/summary_sft/eval_results.json
+          seed: 42
+          max_train_samples: 1
+          max_eval_samples: 1
+          max_steps: 1
+          max_seq_length: 256
+          num_train_epochs: 1
+          learning_rate: 0.0001
+          per_device_train_batch_size: 1
+          per_device_eval_batch_size: 1
+          gradient_accumulation_steps: 1
+          eos_token: <|im_end|>
+          logging_strategy: steps
+          logging_steps: 1
+          eval_strategy: no
+          save_strategy: no
+          eval_steps: 1
+          save_steps: 1
+          save_total_limit: 1
+          run_final_eval: false
+          save_model_after_train: true
+          warmup_ratio: 0.0
+          lr_scheduler_type: cosine
+          weight_decay: 0.01
+          max_grad_norm: 1.0
+          bf16: true
+          fp16: false
+          tf32: true
+          gradient_checkpointing: true
+          assistant_only_loss: true
+          packing: false
+          eval_packing: false
+          dataset_num_proc: 1
+          dataloader_num_workers: 0
+          report_to: none
+          load_best_model_at_end: false
+          metric_for_best_model: eval_loss
+          greater_is_better: false
+          early_stopping_patience: 0
+          early_stopping_threshold: 0.0
+          trust_remote_code: false
+          qlora:
+            enabled: true
+            load_in_4bit: true
+            bnb_4bit_quant_type: nf4
+            bnb_4bit_use_double_quant: true
+            bnb_4bit_compute_dtype: bfloat16
+          lora:
+            r: 16
+            lora_alpha: 32
+            lora_dropout: 0.05
+            bias: none
+            task_type: CAUSAL_LM
+            target_modules: all-linear
+            use_rslora: true
+    outs:
+    - path: artifacts/models/summary_sft
+      hash: md5
+      md5: 9cbf93006034ba5c782ff856b3c68fb6.dir
+      size: 71371733
+      nfiles: 7
+    - path: artifacts/reports/summary_sft/eval_results.json
+      hash: md5
+      md5: 2b57f5825488b72462aaa266ceb51112
+      size: 44
+      isexec: true
+    - path: artifacts/reports/summary_sft/train_results.json
+      hash: md5
+      md5: 962b091a80629af73a81d31422341d8a
+      size: 278
+      isexec: true
+  generate_summary_predictions:
+    cmd: python -m scripts.summary_model_generation_testset --input_path 
+      data/processed/phase2/trl_data/test.jsonl --output_df 
+      artifacts/predictions/summary_predictions_testset.csv --output_metrics 
+      artifacts/eval/summary_generation_latency.json --base_url 
+      http://185.62.108.226:44359/v1 --api_key demo-key --model_name summary-sft
+      --max_tokens 2048 --temperature 0.0
+    deps:
+    - path: data/processed/phase2/trl_data/test.jsonl
+      hash: md5
+      md5: 4e8c418a8f61e7566538bc23981c8180
+      size: 2132602
+      isexec: true
+    - path: scripts/summary_model_generation_testset.py
+      hash: md5
+      md5: 1637d5bdfe75630bf26b9870f77ceaf7
+      size: 4948
+      isexec: true
+    - path: src/app/clients/summarizer_client.py
+      hash: md5
+      md5: 4a1bf435ed3c06deeaa3466935e84554
+      size: 1744
+      isexec: true
+    params:
+      params.yaml:
+        summary_generation:
+          input_path: data/processed/phase2/trl_data/test.jsonl
+          output_df: artifacts/predictions/summary_predictions_testset.csv
+          output_metrics: artifacts/eval/summary_generation_latency.json
+          base_url: http://185.62.108.226:44359/v1
+          api_key: demo-key
+          model_name: summary-sft
+          max_tokens: 2048
+          temperature: 0.0
+    outs:
+    - path: artifacts/eval/summary_generation_latency.json
+      hash: md5
+      md5: 24ff46efe4af73df853fe547fda90ca5
+      size: 185
+      isexec: true
+    - path: artifacts/predictions/summary_predictions_testset.csv
+      hash: md5
+      md5: a7e681c7e71bee102896d1b13f880dc3
+      size: 4450713
+      isexec: true

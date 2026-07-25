@@ -1,0 +1,73 @@
+# Git / GitHub
+.git/
+.github/
+
+# Python env / cache
+.venv/
+.venv-serving/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+
+# Secrets / local env
+.env
+.env.*
+!.env.example
+
+# Jupyter / notebooks
+.ipynb_checkpoints/
+notebooks/
+
+# MLflow / artifacts / logs
+mlruns/
+mlartifacts/
+artifacts/*
+!artifacts/models/
+artifacts/models/*
+!artifacts/models/summary_sft.dvc
+!artifacts/models/sentiment_model.joblib
+!artifacts/models/tfidf.joblib
+*.log
+logs/
+
+# DVC cache/temp - keep .dvc/config, ignore cache
+.dvc/cache/
+.dvc/tmp/
+.dvc/config.local
+
+
+# Data 
+data/raw/
+data/interim/
+data/processed/
+data/benchmark/
+data/benchmark_system/
+data/serving/
+
+# DVC pointer files
+!data/serving.dvc
+!data/.gitignore
+
+
+# Terraform local files
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfplan
+crash.log
+crash.*.log
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+

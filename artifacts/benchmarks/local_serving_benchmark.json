@@ -1,0 +1,126 @@
+{
+  "environment": {
+    "api_base_url": "http://localhost:8000",
+    "product_ids": [
+      "0967805929",
+      "1508810133",
+      "1563834103",
+      "1906487049",
+      "1926644743",
+      "1938887891",
+      "7301113188",
+      "9792284354",
+      "9792954481",
+      "B00002N7HY"
+    ],
+    "primary_product_id": "0967805929",
+    "product_count": 10,
+    "requests_per_get_endpoint": 100,
+    "async_job_count": 10,
+    "max_reviews": 50,
+    "representative_k": 3
+  },
+  "api_latency": {
+    "health": {
+      "requests": 100,
+      "success_count": 100,
+      "success_rate": 1.0,
+      "avg_ms": 2.87,
+      "p50_ms": 2.72,
+      "p95_ms": 3.26,
+      "p99_ms": 3.44,
+      "min_ms": 2.26,
+      "max_ms": 16.52,
+      "status_counts": {
+        "200": 100
+      },
+      "name": "health",
+      "url": "http://localhost:8000/health",
+      "errors_sample": []
+    },
+    "products_limit_5": {
+      "requests": 100,
+      "success_count": 100,
+      "success_rate": 1.0,
+      "avg_ms": 14.57,
+      "p50_ms": 14.29,
+      "p95_ms": 15.83,
+      "p99_ms": 17.12,
+      "min_ms": 13.12,
+      "max_ms": 27.96,
+      "status_counts": {
+        "200": 100
+      },
+      "name": "products_limit_5",
+      "url": "http://localhost:8000/products?limit=5&offset=0",
+      "errors_sample": []
+    }
+  },
+  "async_jobs": {
+    "product_ids": [
+      "0967805929",
+      "1508810133",
+      "1563834103",
+      "1906487049",
+      "1926644743",
+      "1938887891",
+      "7301113188",
+      "9792284354",
+      "9792954481",
+      "B00002N7HY"
+    ],
+    "job_count": 10,
+    "finished_count": 10,
+    "success_rate": 1.0,
+    "final_status_counts": {
+      "finished": 10
+    },
+    "submit_latency": {
+      "requests": 10,
+      "success_count": 10,
+      "success_rate": 1.0,
+      "avg_ms": 11.38,
+      "p50_ms": 9.66,
+      "p95_ms": 24.95,
+      "p99_ms": 24.95,
+      "min_ms": 8.2,
+      "max_ms": 24.95,
+      "status_counts": {
+        "200": 10
+      }
+    },
+    "finish_latency_ms": {
+      "avg_ms": 5733.21,
+      "p50_ms": 5060.71,
+      "p95_ms": 7096.25,
+      "p99_ms": 7096.25,
+      "min_ms": 4053.61,
+      "max_ms": 7096.25
+    },
+    "job_ids_sample": [
+      "52e0cfa2-d5d2-433f-9929-7233b5b75c36",
+      "bbf76f48-075c-4016-9f81-a1dda3a3c5d7",
+      "0163162d-75c5-4080-8d3c-294aa3bc5efa",
+      "7d499792-b22a-44e8-8522-4a520c10801c",
+      "d3daded1-8a20-4d85-9199-4125bf2beae0"
+    ],
+    "errors_sample": []
+  },
+  "cached_insight": {
+    "requests": 100,
+    "success_count": 100,
+    "success_rate": 1.0,
+    "avg_ms": 3.94,
+    "p50_ms": 3.78,
+    "p95_ms": 4.51,
+    "p99_ms": 4.72,
+    "min_ms": 3.31,
+    "max_ms": 15.35,
+    "status_counts": {
+      "200": 100
+    },
+    "name": "cached_insight",
+    "url": "http://localhost:8000/products/0967805929/insights",
+    "errors_sample": []
+  }
+}

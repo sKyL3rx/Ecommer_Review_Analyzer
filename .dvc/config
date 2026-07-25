@@ -1,5 +1,7 @@
 [core]
-    remote = storage
+    remote = gcsremote
 ['remote "storage"']
     url = azure://dvcstore/ecommer-review-analyzer
     account_name = dvcsft
+['remote "gcsremote"']
+    url = gs://ecommerce-review-dvc-vaulted-blend-493604-v2/dvcstore
