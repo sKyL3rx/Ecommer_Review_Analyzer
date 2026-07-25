@@ -13,6 +13,8 @@ services:
       PYTHONPATH: /app
     volumes:
       - ../..:/app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       redis:
         condition: service_healthy
@@ -32,6 +34,8 @@ services:
       PYTHONPATH: /app
     volumes:
       - ../..:/app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       redis:
         condition: service_healthy

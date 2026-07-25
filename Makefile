@@ -13,12 +13,12 @@ TRAIN_BIN ?= $(TRAIN_VENV)/bin
 SERVING_BIN ?= $(SERVING_VENV)/bin
 
 TRAIN_ENV = PATH=$(TRAIN_BIN):$$PATH PYTHONPATH=$(PYTHONPATH_VALUE)
-SERVING_ENV = PATH=$(SERVING_BIN):$$PATH PYTHONPATH=$(PYTHONPATH_VALUE)
+SERVING_ENV = PATH=$(SERVING_BIN):$$PATH PYTHONPATH=$(PYTHONPATH_VALUE) VLLM_USE_FLASHINFER_SAMPLER=0
 
 TRAIN_DVC = $(TRAIN_ENV) $(TRAIN_PYTHON) -m dvc
 SERVING_DVC = PATH=$(SERVING_BIN):$(TRAIN_BIN):$$PATH PYTHONPATH=$(PYTHONPATH_VALUE) $(TRAIN_PYTHON) -m dvc
 
-VLLM_BIN ?= $(TRAIN_BIN)/vllm
+VLLM_BIN ?= $(SERVING_BIN)/vllm
 
 COMPOSE_FILE ?= infra/compose/docker-compose.yml
 API_BASE_URL ?= http://localhost:8000
@@ -115,6 +115,7 @@ init-serving:
 	$(SERVING_PYTHON_BOOTSTRAP) -m venv $(SERVING_VENV)
 	$(SERVING_PYTHON) -m pip install --upgrade pip setuptools wheel
 	$(SERVING_PYTHON) -m pip install -r requirements-serving.txt
+	$(SERVING_PYTHON) -m pip install -r requirements-vllm.txt
 
 init-full: init-train init-serving
 
@@ -168,7 +169,6 @@ sentiment-e2e:
 	$(TRAIN_DVC) repro evaluate_sentiment_baseline
 
 # ---------- DVC: serving parquet artifacts using .venv-serving for stage commands ----------
-# DVC itself runs from .venv, but stage commands resolve python from .venv-serving first.
 
 repro-serving:
 	$(TRAIN_DVC) repro download_serving_data
@@ -222,7 +222,7 @@ train-summary-sft:
 # ---------- vLLM LoRA serving using .venv ----------
 
 serve-vllm:
-	$(TRAIN_ENV) $(VLLM_BIN) serve $(VLLM_BASE_MODEL) \
+	$(SERVING_ENV) $(VLLM_BIN) serve $(VLLM_BASE_MODEL) \
 		--host $(VLLM_HOST) \
 		--port $(VLLM_PORT) \
 		--enable-lora \
@@ -236,7 +236,7 @@ serve-vllm-bg:
 		echo "vLLM already running with PID $$(cat $(VLLM_PID_FILE))"; \
 	else \
 		echo "Starting vLLM in background..."; \
-		$(TRAIN_ENV) nohup $(VLLM_BIN) serve $(VLLM_BASE_MODEL) \
+		$(SERVING_ENV) nohup $(VLLM_BIN) serve $(VLLM_BASE_MODEL) \
 			--host $(VLLM_HOST) \
 			--port $(VLLM_PORT) \
 			--enable-lora \
@@ -309,7 +309,7 @@ benchmark-cold-cache:
 		--flush-redis-before-run \
 		--output artifacts/benchmarks/local_serving_benchmark_cold_cache.json
 
-# ---------- TRUE FULL E2E ----------
+# ---------- FULL E2E ----------
 # Includes:
 # download -> preprocess -> train/eval sentiment
 # serving parquet -> compose API -> load DB -> smoke
