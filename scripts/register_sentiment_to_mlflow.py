@@ -6,13 +6,12 @@ from pathlib import Path
 from typing import Any
 
 import joblib
+import mlflow
 import mlflow.sklearn
 import pandas as pd
+from mlflow import MlflowClient
 from mlflow.models import infer_signature
 from sklearn.pipeline import Pipeline
-
-import mlflow
-from mlflow import MlflowClient
 
 
 def flatten_numeric_metrics(data: dict[str, Any], prefix: str = "") -> dict[str, float]:

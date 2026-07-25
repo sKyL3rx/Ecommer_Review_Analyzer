@@ -6,6 +6,7 @@ from pathlib import Path
 
 import joblib
 import matplotlib.pyplot as plt
+import mlflow
 import pandas as pd
 from sklearn.metrics import (
     ConfusionMatrixDisplay,
@@ -14,8 +15,6 @@ from sklearn.metrics import (
     confusion_matrix,
     precision_recall_fscore_support,
 )
-
-import mlflow
 
 DEFAULT_TEST_PATH = Path("data/processed/test.csv")
 DEFAULT_MODEL_PATH = Path("artifacts/models/sentiment_model.joblib")

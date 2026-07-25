@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import joblib
+import mlflow
 import mlflow.sklearn
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -15,8 +16,6 @@ from sklearn.metrics import (
     classification_report,
     precision_recall_fscore_support,
 )
-
-import mlflow
 
 DEFAULT_TRAIN_PATH = Path("data/processed/train.csv")
 DEFAULT_VAL_PATH = Path("data/processed/val.csv")
