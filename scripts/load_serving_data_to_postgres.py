@@ -5,7 +5,7 @@ from typing import Any
 import pandas as pd
 from sqlalchemy.dialects.postgresql import insert
 
-from src.app.storage.db import SessionLocal, init_db
+from src.app.storage.db import SessionLocal
 from src.app.storage.models import Product, Review
 
 
@@ -32,7 +32,10 @@ def make_review_id(product_id: str, text: str, idx: int) -> str:
     return hashlib.md5(raw.encode("utf-8")).hexdigest()
 
 
-def load_products(catalog_df: pd.DataFrame, limit: int | None) -> set[str]:
+def load_products(
+    catalog_df: pd.DataFrame,
+    limit: int | None,
+) -> set[str]:
     if limit:
         catalog_df = catalog_df.head(limit)
 
@@ -45,9 +48,14 @@ def load_products(catalog_df: pd.DataFrame, limit: int | None) -> set[str]:
                 continue
 
             categories = row.get("categories_list", None)
+
             if categories is not None and pd.isna(categories) is False:
                 if not isinstance(categories, list):
-                    categories = list(categories) if hasattr(categories, "__iter__") else None
+                    categories = (
+                        list(categories)
+                        if hasattr(categories, "__iter__")
+                        else None
+                    )
             else:
                 categories = None
 
@@ -60,15 +68,29 @@ def load_products(catalog_df: pd.DataFrame, limit: int | None) -> set[str]:
                 average_rating=safe_float(row.get("average_rating")),
                 rating_number=safe_int(row.get("rating_number")),
                 review_count=safe_int(row.get("review_count")),
-                avg_review_rating=safe_float(row.get("avg_review_rating")),
-                verified_review_count=safe_int(row.get("verified_review_count")),
-                total_helpful_votes=safe_int(row.get("total_helpful_votes")),
-                latest_review_ts=safe_int(row.get("latest_review_ts")),
+                avg_review_rating=safe_float(
+                    row.get("avg_review_rating")
+                ),
+                verified_review_count=safe_int(
+                    row.get("verified_review_count")
+                ),
+                total_helpful_votes=safe_int(
+                    row.get("total_helpful_votes")
+                ),
+                latest_review_ts=safe_int(
+                    row.get("latest_review_ts")
+                ),
                 image_url=str(row.get("image_url") or ""),
                 categories_list=categories,
                 features_text=str(row.get("features_text") or ""),
-                description_text=str(row.get("description_text") or ""),
+                description_text=str(
+                    row.get("description_text") or ""
+                ),
                 search_text=str(row.get("search_text") or ""),
+            )
+
+            stmt = stmt.on_conflict_do_nothing(
+                index_elements=["product_id"]
             )
 
             session.execute(stmt)
@@ -79,7 +101,10 @@ def load_products(catalog_df: pd.DataFrame, limit: int | None) -> set[str]:
     return product_ids
 
 
-def load_reviews(reviews_df: pd.DataFrame, product_ids: set[str] | None) -> int:
+def load_reviews(
+    reviews_df: pd.DataFrame,
+    product_ids: set[str] | None,
+) -> int:
     inserted = 0
 
     with SessionLocal() as session:
@@ -96,7 +121,12 @@ def load_reviews(reviews_df: pd.DataFrame, product_ids: set[str] | None) -> int:
                 continue
 
             review_id = str(
-                row.get("review_id") or make_review_id(product_id, review_text, int(idx))
+                row.get("review_id")
+                or make_review_id(
+                    product_id,
+                    review_text,
+                    int(idx),
+                )
             )
 
             stmt = insert(Review).values(
@@ -104,26 +134,46 @@ def load_reviews(reviews_df: pd.DataFrame, product_ids: set[str] | None) -> int:
                 product_id=product_id,
                 review_title=str(row.get("review_title") or ""),
                 review_text=review_text,
-                review_char_len=safe_int(row.get("review_char_len")),
+                review_char_len=safe_int(
+                    row.get("review_char_len")
+                ),
                 timestamp=safe_int(row.get("timestamp")),
-                review_datetime=str(row.get("review_datetime") or ""),
+                review_datetime=str(
+                    row.get("review_datetime") or ""
+                ),
                 helpful_vote=safe_int(row.get("helpful_vote")),
-                verified_purchase=bool(row.get("verified_purchase"))
-                if pd.notna(row.get("verified_purchase"))
-                else None,
-                has_review_image=bool(row.get("has_review_image"))
-                if pd.notna(row.get("has_review_image"))
-                else None,
-                rating=safe_float(row.get("rating")),
-                predicted_sentiment=(
-                    str(row.get("predicted_sentiment")).strip().lower()
-                    if "predicted_sentiment" in row and pd.notna(row.get("predicted_sentiment"))
+                verified_purchase=(
+                    bool(row.get("verified_purchase"))
+                    if pd.notna(row.get("verified_purchase"))
                     else None
                 ),
-                sentiment_confidence=safe_float(row.get("sentiment_confidence")),
+                has_review_image=(
+                    bool(row.get("has_review_image"))
+                    if pd.notna(row.get("has_review_image"))
+                    else None
+                ),
+                rating=safe_float(row.get("rating")),
+                predicted_sentiment=(
+                    str(row.get("predicted_sentiment"))
+                    .strip()
+                    .lower()
+                    if (
+                        "predicted_sentiment" in row
+                        and pd.notna(
+                            row.get("predicted_sentiment")
+                        )
+                    )
+                    else None
+                ),
+                sentiment_confidence=safe_float(
+                    row.get("sentiment_confidence")
+                ),
             )
 
-            stmt = stmt.on_conflict_do_nothing(index_elements=["review_id"])
+            stmt = stmt.on_conflict_do_nothing(
+                index_elements=["review_id"]
+            )
+
             session.execute(stmt)
             inserted += 1
 
@@ -136,9 +186,11 @@ def load_reviews(reviews_df: pd.DataFrame, product_ids: set[str] | None) -> int:
     return inserted
 
 
-def main(catalog_path: str, reviews_path: str, limit: int | None) -> None:
-    init_db()
-
+def main(
+    catalog_path: str,
+    reviews_path: str,
+    limit: int | None,
+) -> None:
     print(f"Reading catalog: {catalog_path}")
     catalog_df = pd.read_parquet(catalog_path)
 
@@ -146,19 +198,39 @@ def main(catalog_path: str, reviews_path: str, limit: int | None) -> None:
     reviews_df = pd.read_parquet(reviews_path)
 
     print("Loading products...")
-    product_ids = load_products(catalog_df, limit=limit)
+    product_ids = load_products(
+        catalog_df,
+        limit=limit,
+    )
     print(f"Loaded/upserted {len(product_ids)} products")
 
     print("Loading reviews...")
-    inserted_reviews = load_reviews(reviews_df, product_ids=product_ids)
+    inserted_reviews = load_reviews(
+        reviews_df,
+        product_ids=product_ids,
+    )
     print(f"Loaded {inserted_reviews} reviews")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--catalog_path", required=True)
-    parser.add_argument("--reviews_path", required=True)
-    parser.add_argument("--limit", type=int, default=None)
+
+    parser.add_argument(
+        "--catalog_path",
+        required=True,
+    )
+
+    parser.add_argument(
+        "--reviews_path",
+        required=True,
+    )
+
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+    )
+
     args = parser.parse_args()
 
     main(

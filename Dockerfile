@@ -18,6 +18,12 @@ RUN pip install --no-cache-dir --upgrade pip \
 
 COPY . .
 
-RUN mkdir -p .dvc && printf "\n[core]\n    no_scm = true\n" > .dvc/config.local
+RUN mkdir -p /app/artifacts/models
+
+COPY artifacts/models/final/sentiment/tfidf.joblib \
+     /app/artifacts/models/tfidf.joblib
+
+COPY artifacts/models/final/sentiment/sentiment_model.joblib \
+     /app/artifacts/models/sentiment_model.joblib
 
 EXPOSE 8000

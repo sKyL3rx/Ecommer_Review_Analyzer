@@ -42,13 +42,13 @@ mlartifacts/
 htmlcov/
 
 # Terraform local
-.terraform/
+**/.terraform/*
 *.tfstate
 *.tfstate.*
-*.tfvars
 *.tfplan
 crash.log
 crash.*.log
+**/terraform.tfvars
 
 # All models files
 *.pt
@@ -58,13 +58,17 @@ crash.*.log
 *.safetensors
 *.pkl
 *.joblib
+artifacts/models/final/summary_sft/
+
+# Allow serving sentiment models into Docker build context
+!artifacts/models/final/sentiment/tfidf.joblib
+!artifacts/models/final/sentiment/sentiment_model.joblib
 
 # OS/editor
 .DS_Store
 .vscode/
 .idea/
 
-README.md
-# Local infrastructure
-infra/k8s/
-infra/terraform/
+# Local CLI binaries
+/kubectl
+
