@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ecommerce-review-config
+  namespace: ecommerce-review
+data:
+  REDIS_URL: "redis://redis:6379/0"
+
+  VLLM_BASE_URL: "http://vllm:8000/v1"
+
+  SUMMARY_MODEL_NAME: "summary-sft"
+  SUMMARY_MODEL_VERSION: "summary-sft"
+
+  USE_FAKE_SUMMARIZER: "false"
+  USE_FAKE_SENTIMENT: "false"
+  AUTO_CREATE_TABLES: "false"
+
+  REDIS_CACHE_TTL_SECONDS: "3600"
+
+  
