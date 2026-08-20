@@ -1,0 +1,51 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migrate
+  namespace: ecommerce-review
+
+spec:
+  backoffLimit: 4
+
+  template:
+    metadata:
+      labels:
+        app: db-migrate
+
+    spec:
+      restartPolicy: OnFailure
+
+      nodeSelector:
+        workload: cpu
+
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox:1.36
+
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z postgres 5432; do
+                echo "Waiting for postgres..."
+                sleep 2
+              done
+
+      containers:
+        - name: migrate
+          image: ecommerce-review-analyzer
+          imagePullPolicy: IfNotPresent
+
+          command:
+            - alembic
+
+          args:
+            - upgrade
+            - head
+
+          envFrom:
+            - configMapRef:
+                name: ecommerce-review-config
+
+            - secretRef:
+                name: ecommerce-review-env  

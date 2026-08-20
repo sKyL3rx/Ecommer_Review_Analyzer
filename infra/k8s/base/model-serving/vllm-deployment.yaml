@@ -1,0 +1,135 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm
+  namespace: ecommerce-review
+
+spec:
+  replicas: 1
+
+  strategy:
+    type: Recreate
+
+  selector:
+    matchLabels:
+      app: vllm
+
+  template:
+    metadata:
+      labels:
+        app: vllm
+
+    spec:
+      serviceAccountName: dvc-puller
+      enableServiceLinks: false
+
+      nodeSelector:
+        workload: gpu
+        iam.gke.io/gke-metadata-server-enabled: "true"
+
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Equal"
+          value: "present"
+          effect: "NoSchedule"
+
+      volumes:
+        - name: lora-adapter
+          emptyDir: {}
+
+      initContainers:
+        - name: dvc-pull-lora-adapter
+          image: ecommerce-review-dvc-puller
+          imagePullPolicy: IfNotPresent
+
+          workingDir: /app
+
+          command:
+            - sh
+            - -c
+
+          args:
+            - |
+              set -eux
+
+              echo "DVC remotes:"
+              dvc remote list
+
+              sleep 10
+
+              ATTEMPT=1
+
+              until dvc pull \
+                -r gcsremote \
+                artifacts/models/final/summary_sft.dvc
+              do
+                if [ "$ATTEMPT" -ge 12 ]; then
+                  echo "DVC pull failed after ${ATTEMPT} attempts"
+                  exit 1
+                fi
+
+                ATTEMPT=$((ATTEMPT + 1))
+                sleep 5
+              done
+
+              echo "Adapter files:"
+              ls -lah artifacts/models/final/summary_sft
+
+          volumeMounts:
+            - name: lora-adapter
+              mountPath: /app/artifacts/models/final/summary_sft
+
+      containers:
+        - name: vllm
+          image: vllm-serving
+          imagePullPolicy: IfNotPresent
+
+          command:
+            - vllm
+
+          args:
+            - serve
+            - Qwen/Qwen2.5-3B-Instruct
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8000"
+            - --api-key
+            - demo-key
+            - --served-model-name
+            - Qwen/Qwen2.5-3B-Instruct
+            - --gpu-memory-utilization
+            - "0.85"
+            - --max-model-len
+            - "4096"
+            - --enable-lora
+            - --max-lora-rank
+            - "16"
+            - --lora-modules
+            - summary-sft=/lora-adapter
+
+          ports:
+            - containerPort: 8000
+
+          volumeMounts:
+            - name: lora-adapter
+              mountPath: /lora-adapter
+
+          resources:
+            requests:
+              cpu: "1"
+              memory: "6Gi"
+              nvidia.com/gpu: 1
+
+            limits:
+              cpu: "3"
+              memory: "12Gi"
+              nvidia.com/gpu: 1
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 180
+            periodSeconds: 10
+            failureThreshold: 30

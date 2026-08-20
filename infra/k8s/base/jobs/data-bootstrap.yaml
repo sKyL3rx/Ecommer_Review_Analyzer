@@ -1,0 +1,150 @@
+apiVersion: batch/v1
+kind: Job
+
+metadata:
+  name: data-bootstrap
+  namespace: ecommerce-review
+
+spec:
+  backoffLimit: 2
+
+  template:
+    metadata:
+      labels:
+        app: data-bootstrap
+
+    spec:
+      restartPolicy: Never
+
+      serviceAccountName: dvc-puller
+
+      nodeSelector:
+        workload: cpu
+        iam.gke.io/gke-metadata-server-enabled: "true"
+
+      volumes:
+        - name: serving-data
+          emptyDir: {}
+
+      initContainers:
+
+        # --------------------------------------------------
+        # 1. Wait until Alembic schema exists
+        # --------------------------------------------------
+        - name: wait-for-migrations
+          image: postgres:16
+
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ecommerce-review-env
+                  key: POSTGRES_PASSWORD
+
+          command:
+            - sh
+            - -c
+
+          args:
+            - |
+              set -eu
+
+              until psql \
+                -h postgres \
+                -U ecom \
+                -d ecom_review \
+                -Atqc \
+                "SELECT version_num FROM alembic_version LIMIT 1;" \
+                >/dev/null 2>&1
+              do
+                echo "Waiting for Alembic migrations..."
+                sleep 3
+              done
+
+              echo "Database schema is ready."
+
+        # --------------------------------------------------
+        # 2. Pull serving artifacts from GCS/DVC
+        # --------------------------------------------------
+        - name: dvc-pull-serving
+          image: ecommerce-review-dvc-puller
+
+          workingDir: /app
+
+          command:
+            - sh
+            - -c
+
+          args:
+            - |
+              set -eux
+
+              # Give GKE metadata server a moment after Pod startup.
+              sleep 10
+
+              ATTEMPT=1
+
+              until dvc pull \
+                -r gcsremote \
+                data/serving/appliances_demo_catalog.parquet \
+                data/serving/appliances_demo_reviews.parquet
+              do
+                if [ "$ATTEMPT" -ge 12 ]; then
+                  echo "DVC pull failed after ${ATTEMPT} attempts"
+                  exit 1
+                fi
+
+                ATTEMPT=$((ATTEMPT + 1))
+                sleep 5
+              done
+
+              echo "=== Serving artifacts ==="
+
+              ls -lh \
+                data/serving/appliances_demo_catalog.parquet \
+                data/serving/appliances_demo_reviews.parquet
+
+          volumeMounts:
+            - name: serving-data
+              mountPath: /app/data/serving
+
+      containers:
+
+        # --------------------------------------------------
+        # 3. Reuse EXISTING project loader
+        # --------------------------------------------------
+        - name: load-serving-data
+          image: ecommerce-review-analyzer
+
+          workingDir: /app
+
+          command:
+            - python
+            - -m
+            - scripts.load_serving_data_to_postgres
+
+          args:
+            - --catalog_path
+            - data/serving/appliances_demo_catalog.parquet
+
+            - --reviews_path
+            - data/serving/appliances_demo_reviews.parquet
+
+          envFrom:
+            - configMapRef:
+                name: ecommerce-review-config
+
+            - secretRef:
+                name: ecommerce-review-env
+
+          volumeMounts:
+            - name: serving-data
+              mountPath: /app/data/serving
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "2Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"

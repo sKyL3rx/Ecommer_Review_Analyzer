@@ -25,14 +25,23 @@ __pycache__/
 notebooks/
 
 # MLflow / artifacts / logs
+
 mlruns/
 mlartifacts/
+
 artifacts/*
 !artifacts/models/
+
 artifacts/models/*
-!artifacts/models/summary_sft.dvc
-!artifacts/models/sentiment_model.joblib
-!artifacts/models/tfidf.joblib
+!artifacts/models/final/
+
+artifacts/models/final/*
+!artifacts/models/final/sentiment.dvc
+!artifacts/models/final/summary_sft.dvc
+
+!artifacts/models/final/sentiment/tfidf.joblib
+!artifacts/models/final/sentiment/sentiment_model.joblib
+
 *.log
 logs/
 

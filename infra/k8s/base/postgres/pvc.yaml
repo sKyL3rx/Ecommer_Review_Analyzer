@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: ecommerce-review
+spec:
+  accessModes:
+    - ReadWriteOnce
+
+  storageClassName: standard-rwo
+
+  resources:
+    requests:
+      storage: 10Gi
+
+      
