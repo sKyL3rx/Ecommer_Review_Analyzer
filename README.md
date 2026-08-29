@@ -11,7 +11,9 @@ It combines a lightweight sentiment model (**TF-IDF + Logistic Regression**) wit
 
 ## Demo
 
-[Watch the demo on YouTube]([https://www.youtube.com/watch?v=KhPh3K2NP2M](https://www.youtube.com/watch?v=2t5lR_kI96U))
+[![Ecommerce Review Intelligence Platform Demo](https://img.youtube.com/vi/2t5lR_kI96U/maxresdefault.jpg)](https://www.youtube.com/watch?v=2t5lR_kI96U)
+
+[Watch the demo on YouTube](https://www.youtube.com/watch?v=2t5lR_kI96U)
 
 ## What this project includes
 
