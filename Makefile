@@ -23,6 +23,7 @@ VLLM_BIN ?= $(SERVING_BIN)/vllm
 COMPOSE_FILE ?= infra/compose/docker-compose.yml
 API_BASE_URL ?= http://localhost:8000
 
+
 LOCAL_DATABASE_URL ?= postgresql+psycopg://ecom:ecom@localhost:5432/ecom_review
 LOCAL_REDIS_URL ?= redis://localhost:6379/0
 
@@ -39,6 +40,7 @@ VLLM_LORA_DIR ?= artifacts/models/summary_sft
 VLLM_MAX_LORA_RANK ?= 16
 VLLM_LOG ?= artifacts/logs/vllm.log
 VLLM_PID_FILE ?= artifacts/logs/vllm.pid
+STREAMLIT_APP ?= src/frontend/streamlit_app.py
 
 .PHONY: help init init-train init-serving init-full doctor \
 	dvc-dag dvc-status clean-repro \
@@ -51,7 +53,8 @@ VLLM_PID_FILE ?= artifacts/logs/vllm.pid
 	compose-up compose-down compose-reset migrate load-serving-data smoke \
 	benchmark-local benchmark-cold-cache \
 	bootstrap-local bootstrap-full full-e2e \
-	test-unit test-integration lint format ci-local
+	running_frontend \
+	test-unit test-integration lint format ci-local 
 
 help:
 	@echo "Setup:"
@@ -179,6 +182,10 @@ repro-serving:
 
 compose-up:
 	docker compose -f $(COMPOSE_FILE) up --build -d
+	docker compose -f $(COMPOSE_FILE) run --rm migrate
+
+compose-up-no-build:
+	docker compose -f $(COMPOSE_FILE) up -d
 	docker compose -f $(COMPOSE_FILE) run --rm migrate
 
 compose-down:
@@ -326,6 +333,11 @@ bootstrap-local: sentiment-e2e repro-serving compose-up load-serving-data smoke 
 bootstrap-full: bootstrap-local
 
 full-e2e: bootstrap-local
+
+running_frontend: 
+	$(SERVING_ENV) $(SERVING_PYTHON) -m streamlit run $(STREAMLIT_APP)
+
+
 
 # ---------- Tests / quality ----------
 
