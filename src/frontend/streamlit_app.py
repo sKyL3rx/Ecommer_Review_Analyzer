@@ -7,7 +7,6 @@ from typing import Any
 import requests
 import streamlit as st
 
-
 DEFAULT_API_BASE = "http://127.0.0.1:8000"
 
 
