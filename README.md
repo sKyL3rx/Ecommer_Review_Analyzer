@@ -9,6 +9,10 @@ It combines a lightweight sentiment model (**TF-IDF + Logistic Regression**) wit
 
 ![System Architecture](docs/assets/system_architecture.jpg)
 
+## Demo
+
+[Watch the demo on YouTube]([https://www.youtube.com/watch?v=KhPh3K2NP2M](https://www.youtube.com/watch?v=2t5lR_kI96U))
+
 ## What this project includes
 
 - end-to-end data + ML pipeline using **DVC**
